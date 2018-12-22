@@ -18,8 +18,8 @@ import groovy.json.*
 import org.apache.commons.lang3.StringEscapeUtils;
 import java.text.SimpleDateFormat
 include 'asynchttp_v1'
-String devVersion() { return "2.0.5"}
-String devModified() { return "2018-12-05" }
+String devVersion() { return "2.0.7"}
+String devModified() { return "2018-12-18" }
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/$imgName" }
 
 metadata {
@@ -55,6 +55,7 @@ metadata {
         attribute "musicSupported", "string"
         attribute "alarmSupported", "string"
         attribute "reminderSupported", "string"
+        attribute "supportedMusic", "string"
         command "playTextAndResume"
         command "playTrackAndResume"
         command "playTrackAndRestore"
@@ -74,8 +75,10 @@ metadata {
         command "playTellStory"
         command "searchMusic"
         command "searchAmazonMusic"
+        command "searchAppleMusic"
         command "searchPandora"
         command "searchIheart"
+        command "searchSiriusXm"
         command "searchSpotify"
         command "searchTuneIn"
         command "createAlarm"
@@ -85,7 +88,6 @@ metadata {
         command "storeCurrentVolume"
         command "restoreLastVolume"
         command "setVolumeSpeakAndRestore"
-        command "testMultiCmd"
     }
 
     tiles (scale: 2) {
@@ -232,14 +234,17 @@ metadata {
         valueTile("currentAlbum", "device.currentAlbum", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
             state("default", label:'Album:\n${currentValue}')
         }
-        valueTile("lastSpeakCmd", "device.lastSpeakCmd", height: 2, width: 6, inactiveLabel: false, decoration: "flat") {
+        valueTile("lastSpeakCmd", "device.lastSpeakCmd", height: 2, width: 3, inactiveLabel: false, decoration: "flat") {
             state("lastSpeakCmd", label:'Last Text Sent:\n${currentValue}')
         }
-        valueTile("lastCmdSentDt", "device.lastCmdSentDt", height: 2, width: 4, inactiveLabel: false, decoration: "flat") {
+        valueTile("lastCmdSentDt", "device.lastCmdSentDt", height: 2, width: 3, inactiveLabel: false, decoration: "flat") {
             state("lastCmdSentDt", label:'Last Text Sent:\n${currentValue}')
         }
         valueTile("alexaWakeWord", "device.alexaWakeWord", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("alexaWakeWord", label:'Wake Word:\n${currentValue}')
+        }
+        valueTile("supportedMusic", "device.supportedMusic", height: 2, width: 4, inactiveLabel: false, decoration: "flat") {
+            state("supportedMusic", label:'Supported Music:\n${currentValue}')
         }
         standardTile("sendTest", "sendTest", height: 1, width: 2, decoration: "flat") {
             state("default", label:'Send Test TTS', action: 'sendTestTts')
@@ -262,8 +267,8 @@ metadata {
         standardTile("playTellStory", "playTellStory", height: 1, width: 2, decoration: "flat") {
             state("default", label:'Tell-a-Story', action: 'playTellStory')
         }
-        standardTile("multiTest", "multiTest", height: 1, width: 2, decoration: "flat") {
-            state("default", label:'Multi Test', action: 'testMultiCmd')
+        standardTile("testSports", "testSports", height: 1, width: 2, decoration: "flat") {
+            state("default", label:'Sports Test', action: 'testSports')
         }
         standardTile("resetQueue", "resetQueue", height: 1, width: 2, decoration: "flat") {
             state("default", label:'Reset Queue', action: 'resetQueue')
@@ -278,8 +283,8 @@ metadata {
         main(["deviceStatus"])
         details([
             "mediaMulti", "currentAlbum", "currentStation", "dtCreated", "deviceFamily", "deviceStyle", "onlineStatus", "alarmVolume", "volumeSupported", "alexaWakeWord", "ttsSupported",
-            "playWeather", "playSingASong", "playFlashBrief", "playGoodMorning", "playTraffic", "playTellStory", "sendTest", "doNotDisturb", "resetQueue",
-            "lastSpeakCmd", "lastCmdSentDt", "refresh", "multiTest"])
+            "playWeather", "playSingASong", "playFlashBrief", "playGoodMorning", "playTraffic", "playTellStory", "sendTest", "doNotDisturb", "resetQueue", "refresh", "supportedMusic",
+            "lastSpeakCmd", "lastCmdSentDt"])
     }
 
     preferences {
@@ -339,10 +344,12 @@ def getShortDevName(){
 
 public setAuthState(authenticated) {
     state?.authValid = (authenticated == true)
+    if(authenticated != true && state?.refreshScheduled) { unschedule("refreshData"); state?.refreshScheduled = false }
 }
 
 Boolean isAuthOk() {
-    if(state?.authValid != true) {
+    if(state?.authValid != true && state?.refreshScheduled) { unschedule("refreshData"); state?.refreshScheduled = false }
+    if(state?.authValid != true && state?.cookie != null) {
         log.warn "Echo Speaks Authentication is no longer valid... Please login again and commands will be allowed again!!!"
         state?.remove("cookie")
         return false
@@ -387,6 +394,9 @@ Boolean isCommandTypeAllowed(String type, noLogs=false) {
             case "amazonMusic":
                 warnMsg = "OOPS... Amazon Music is NOT Supported by this Device!!!"
                 break
+            case "appleMusic":
+                warnMsg = "OOPS... Apple Music is NOT Supported by this Device!!!"
+                break
             case "tuneInRadio":
                 warnMsg = "OOPS... Tune-In Radio is NOT Supported by this Device!!!"
                 break
@@ -395,6 +405,9 @@ Boolean isCommandTypeAllowed(String type, noLogs=false) {
                 break
             case "pandoraRadio":
                 warnMsg = "OOPS... Pandora Radio is NOT Supported by this Device!!!"
+                break
+            case "siriusXm":
+                warnMsg = "OOPS... Sirius XM Radio is NOT Supported by this Device!!!"
                 break
             case "spotify":
                 warnMsg = "OOPS... Spotify is NOT Supported by this Device!!!"
@@ -415,7 +428,7 @@ Boolean permissionOk(type) {
 
 Boolean musicSearchSupported() {
     if(!state?.permissions) { return false }
-    ["amazonMusic", "pandoraRadio", "tuneInRadio", "iHeartRadio", "spotify"]?.each { if(permissionOk(it as String) == true) { return true } }
+    ["amazonMusic", "appleMusic", "pandoraRadio", "tuneInRadio", "iHeartRadio", "siriusXm", "spotify"]?.each { if(permissionOk(it as String) == true) { return true } }
     return false
 }
 
@@ -445,7 +458,9 @@ void updateDeviceStatus(Map devData) {
             state?.cookie = devData?.cookie
             state?.amazonDomain = devData?.amazonDomain
             state?.regionLocale = devData?.regionLocale
-            state?.permissions = devData?.permissionMap
+            Map permissions = state?.permissions ?: [:]
+            devData?.permissionMap?.each {k,v -> permissions[k] = v }
+            state?.permissions = permissions
             state?.hasClusterMembers = devData?.hasClusterMembers
             //log.trace "hasClusterMembers: ${ state?.hasClusterMembers}"
             // log.trace "permissions: ${state?.permissions}"
@@ -532,6 +547,7 @@ private refreshData() {
         log.warn "Skipping Device Data Refresh... Device is OFFLINE... (Offline Status Updated Every 10 Minutes)"
         return 
     }
+    if(!isAuthOk()) {return}
     logger("trace", "permissions: ${state?.permissions}")
     if(state?.permissions?.mediaPlayer == true) {
         getPlaybackState()
@@ -571,6 +587,16 @@ public setOnlineStatus(Boolean isOnline) {
     }
 }
 
+private respIsValid(response, methodName) {
+    if (response.hasError()) { 
+        if(response?.getStatus() == 401) {
+            setAuthState(false)
+            return false
+        } else { if(response?.getStatus() > 401) { log.error "${methodName} Error: ${response.getErrorMessage()}" } }
+    }
+    return true
+}
+
 private getPlaybackState() {
     asynchttp_v1.get(getPlaybackStateHandler, [
         uri: getAmazonUrl(),
@@ -590,6 +616,7 @@ private getPlaybackState() {
 }
 
 def getPlaybackStateHandler(response, data, isGroupResponse=false) {
+    if(!respIsValid(response, "getPlaybackStateHandler")) {return}
     try { 
         //notihing to see here
     } catch (e) { 
@@ -600,7 +627,7 @@ def getPlaybackStateHandler(response, data, isGroupResponse=false) {
     // log.debug "response: ${response?.json}"
     if (response.hasError()) {
         // log.error "getPlaybackStateHandler | Status: ${response?.getStatus()} | Error: ${response.getErrorMessage()}"
-        //if(response?.statusCode >= 400 && response?.statusCode < 500) { log.error "getPlaybackStateHandler | Status: ${response?.getStatus()} | Error: ${response.getErrorJson()}" }
+        //if(response?.getStatus() >= 400 && response?.getStatus() < 500) { log.error "getPlaybackStateHandler | Status: ${response?.getStatus()} | Error: ${response.getErrorJson()}" }
         return
     } else {
         sData = response?.json
@@ -685,13 +712,11 @@ private getAlarmVolume() {
 }
 
 def getAlarmVolumeHandler(response, data) {
+    if(!respIsValid(response, "getAlarmVolumeHandler")) {return}
     try { 
         //notihing to see here
     } catch (e) { 
         //notihing to see here
-    }
-    if (response.hasError()) { 
-        if(response?.statusCode >= 400 && response?.statusCode < 500) { log.error "getAlarmVolumeHandler Error: ${response.getErrorJson()}" }
     }
     def sData = response?.json
     logger("trace", "getAlarmVolume: $sData")
@@ -715,9 +740,7 @@ private getWakeWord() {
 }
 
 def getWakeWordHandler(response, data) {
-    if (response.hasError()) { 
-        if(response?.statusCode >= 400 && response?.statusCode < 500) { log.error "getWakeWordHandler Error: ${response.getErrorMessage()}" } 
-    }
+    if(!respIsValid(response, "getWakeWordHandler")) {return}
     def sData = response?.json
     // log.debug "sData: $sData"
     def wakeWord = sData?.wakeWords?.find { it?.deviceSerialNumber == state?.serialNumber } ?: null
@@ -747,13 +770,11 @@ private getAvailableWakeWords() {
 }
 
 def getAvailableWakeWordsHandler(response, data) {
+    if(!respIsValid(response, "getAvailableWakeWordsHandler")) {return}
     try { 
         //notihing to see here
     } catch (e) { 
         //notihing to see here
-    }
-    if (response.hasError()) { 
-        if(response?.statusCode >= 400 && response?.statusCode < 500) { log.error "getAvailableWakeWordsHandler Error: ${response.getErrorMessage()}" } 
     }
     def sData = response?.json
     def wakeWords = sData?.wakeWords ?: []
@@ -777,13 +798,11 @@ private getDoNotDisturb() {
 }
 
 def getDoNotDisturbHandler(response, data) {
+    if(!respIsValid(response, "getDoNotDisturbHandler")) {return}
     try { 
         //notihing to see here
     } catch (e) { 
         //notihing to see here
-    }
-    if (response.hasError()) { 
-        if(response?.statusCode >= 400 && response?.statusCode < 500) { log.error "getDoNotDisturbHandler Error: ${response.getErrorMessage()}" } 
     }
     def sData = response?.json
     def dndData = sData?.doNotDisturbDeviceStatusList?.size() ? sData?.doNotDisturbDeviceStatusList?.find { it?.deviceSerialNumber == state?.serialNumber } : [:]
@@ -815,14 +834,11 @@ private getPlaylists() {
 }
 
 def getPlaylistsHandler(response, data) {
+    if(!respIsValid(response, "getPlaylistsHandler")) {return}
     try { 
         //notihing to see here
     } catch (e) { 
         //notihing to see here
-    }
-    if (response.hasError()) {
-        if(response?.statusCode >= 400 && response?.statusCode < 500) { log.error "getPlaylistsHandler Error: ${response.getErrorMessage()}" }
-        // return
     }
     def sData = response?.json
     logger("trace", "getPlaylists: ${sData}")
@@ -849,14 +865,11 @@ private getMusicProviders() {
 }
 
 def getMusicProvidersHandler(response, data) {
+    if(!respIsValid(response, "getMusicProvidersHandler")) {return}
     try { 
         //notihing to see here
     } catch (e) { 
         //notihing to see here
-    }
-    if (response.hasError()) {
-        if(response?.statusCode >= 400 && response?.statusCode < 500) { log.error "getMusicProvidersHandler Error: ${response.getErrorMessage()}" }
-        // return
     }
     def sData = response?.json
     logger("trace", "getMusicProviders: ${sData}")
@@ -865,6 +878,12 @@ def getMusicProvidersHandler(response, data) {
         sData?.findAll { it?.availability == "AVAILABLE" }?.each { item->
             items[item?.id] = item?.displayName
         }
+        state?.permissions["appleMusic"] = (items?.containsKey("APPLE_MUSIC"))
+        state?.permissions["siriusXm"] = (items?.containsKey("SIRIUSXM"))
+    }
+    String lItems = items?.collect{ it?.value }?.sort()?.join(", ")
+    if(isStateChange(device, "supportedMusic", lItems?.toString())) {
+        sendEvent(name: "supportedMusic", value: lItems?.toString(), display: false, displayed: false)
     }
     if(isStateChange(device, "alexaMusicProviders", items?.toString())) {
         // log.trace "Alexa Music Providers Changed to ${items}"
@@ -887,13 +906,11 @@ private getNotifications() {
 }
 
 def getNotificationsHandler(response, data) {
+    if(!respIsValid(response, "getNotificationsHandler")) {return}
     try { 
         //notihing to see here
     } catch (e) { 
         //notihing to see here
-    }
-    if (response.hasError()) { 
-        if(response?.statusCode >= 400 && response?.statusCode < 500) { log.error "getNotificationsHandler Error: ${response.getErrorMessage()}" }
     }
     List newList = []
     if(response?.getStatus() == 200) {
@@ -938,20 +955,24 @@ private sendAmazonCommand(String method, Map params, Map otherData) {
 
 def amazonCommandResp(response, data) {
     if(response?.hasError()) {
-        log.error "amazonCommandResp error: ${response?.getErrorMessage()}"
+        log.error "amazonCommandResp error: ${response?.getErrorMessage()} | Json: ${response?.errorJson ?: null}"
     } else {
         def resp = response?.data ? response?.getJson() : null
         // logger("warn", "amazonCommandResp | Status: (${response?.getStatus()}) | Response: ${resp} | PassThru-Data: ${data}")
         if(response?.getStatus() == 200) {
             if(data?.cmdDesc?.startsWith("PlayMusicValidate")) {
                 if (resp?.result != "VALID") {
-                    log.error "PlayMusicProvider Request Invalid..."
+                    log.error "Amazon the Music Search Request as Invalid | MusicProvider: [${data?.validObj?.operationPayload?.musicProviderId}] | Search Phrase: (${data?.validObj?.operationPayload?.searchPhrase})"
                     return
                 }
                 data?.validObj?.operationPayload = resp?.operationPayload
                 Map seqJson = ["@type": "com.amazon.alexa.behaviors.model.Sequence", "startNode": data?.validObj]
                 seqJson?.startNode["@type"] = "com.amazon.alexa.behaviors.model.OpaquePayloadOperationNode"
-                sendSequenceCommand("PlayMusic | Provider: (${data?.validObj?.operationPayload?.musicProviderId})", seqJson, null)
+                if(data?.volume) { 
+                    sendMultiSequenceCommand([[command: data?.validObj], [command: "volume", value: data?.volume]], true)
+                } else {
+                    sendSequenceCommand("PlayMusic | Provider: (${data?.validObj?.operationPayload?.musicProviderId})", seqJson, null)
+                }
             } else {
                 log.trace "amazonCommandResp | Status: (${response?.getStatus()}) | Response: ${resp} | (${data?.cmdDesc}) was Successfully Sent!!!"
             }
@@ -975,13 +996,22 @@ private sendSequenceCommand(type, command, value) {
 private sendMultiSequenceCommand(commands, parallel=false) {
     String seqType = parallel ? "ParallelNode" : "SerialNode"
     List nodeList = []
-    commands?.each { cmdItem-> nodeList?.push(createSequenceNode(cmdItem?.command, cmdItem?.value)) }
+    commands?.each { cmdItem-> 
+        if(cmdItem?.command instanceof Map) {
+            nodeList?.push(cmdItem?.command)
+        } else { nodeList?.push(createSequenceNode(cmdItem?.command, cmdItem?.value)) }
+     }
     Map seqJson = [ "sequence": [ "@type": "com.amazon.alexa.behaviors.model.Sequence", "startNode": [ "@type": "com.amazon.alexa.behaviors.model.${seqType}", "name": null, "nodesToExecute": nodeList ] ] ]
     sendSequenceCommand("MultiSequence", seqJson, null)
 }
 
 def searchTest() {
     searchAmazonMusic("thriller")
+}
+
+def testSports() {
+    log.trace "testSports"
+    sendSequenceCommand("Test", "stop", null)
 }
 /*******************************************************************
             Device Command FUNCTIONS
@@ -1223,75 +1253,113 @@ def speak(String msg) {
     }
 }
 
-def playWeather() {
-    doSequenceCmd("WeatherCommand", "weather")
+def playWeather(volume=null, restoreVolume=null) {
+    if(volume) {
+        List seqs = [[command: "volume", value: volume], [command: "weather"]]
+        if(restoreVolume) { seqs?.push([command: "volume", value: restoreVolume]) }
+        sendMultiSequenceCommand(seqs)
+    } else { doSequenceCmd("WeatherCommand", "weather") }
     incrementCntByKey("use_cnt_playWeather")
 }
 
-def playTraffic() {
-    doSequenceCmd("TrafficCommand", "traffic")
+def playTraffic(volume=null, restoreVolume=null) {
+    if(volume) {
+        List seqs = [[command: "volume", value: volume], [command: "traffic"]]
+        if(restoreVolume) { seqs?.push([command: "volume", value: restoreVolume]) }
+        sendMultiSequenceCommand(seqs)
+    } else { doSequenceCmd("TrafficCommand", "traffic") }
     incrementCntByKey("use_cnt_playTraffic")
 }
 
-def playSingASong() {
-    doSequenceCmd("SingCommand", "singasong")
+def playSingASong(volume=null, restoreVolume=null) {
+    if(volume) {
+        List seqs = [[command: "volume", value: volume], [command: "singasong"]]
+        if(restoreVolume) { seqs?.push([command: "volume", value: restoreVolume]) }
+        sendMultiSequenceCommand(seqs)
+    } else { doSequenceCmd("SingCommand", "singasong") }
     incrementCntByKey("use_cnt_playSong")
 }
 
-def playFlashBrief() {
+def playFlashBrief(volume=null, restoreVolume=null) {
     if(isCommandTypeAllowed("flashBriefing")) {
-        doSequenceCmd("FlashCommand", "flashbriefing")
+        if(volume) {
+            List seqs = [[command: "volume", value: volume], [command: "flashbriefing"]]
+            if(restoreVolume) { seqs?.push([command: "volume", value: restoreVolume]) }
+            sendMultiSequenceCommand(seqs)
+        } else { doSequenceCmd("FlashCommand", "flashbriefing") }
         incrementCntByKey("use_cnt_playBrief")
     }
 }
 
-def playGoodMorning() {
-    doSequenceCmd("GoodMorningCommand", "goodmorning")
+def playGoodMorning(volume=null, restoreVolume=null) {
+    if(volume) {
+        List seqs = [[command: "volume", value: volume], [command: "goodmorning"]]
+        if(restoreVolume) { seqs?.push([command: "volume", value: restoreVolume]) }
+        sendMultiSequenceCommand(seqs)
+    } else { doSequenceCmd("GoodMorningCommand", "goodmorning") }
     incrementCntByKey("use_cnt_playGoodMorning")
 }
 
-def playTellStory() {
-    doSequenceCmd("StoryCommand", "tellstory")
+def playTellStory(volume=null, restoreVolume=null) {
+    if(volume) {
+        List seqs = [[command: "volume", value: volume], [command: "tellstory"]]
+        if(restoreVolume) { seqs?.push([command: "volume", value: restoreVolume]) }
+        sendMultiSequenceCommand(seqs)
+    } else { doSequenceCmd("StoryCommand", "tellstory") }
     incrementCntByKey("use_cnt_playStory")
 }
 
-def searchMusic(String searchPhrase, String providerId) {
+def searchMusic(String searchPhrase, String providerId, volume=null) {
     if(musicSearchSupported()) {
-        doSearchMusicCmd(searchPhrase, providerId)
+        doSearchMusicCmd(searchPhrase, providerId, volume)
     }
 }
 
-def searchAmazonMusic(String searchPhrase) {
+def searchAmazonMusic(String searchPhrase, volume=null) {
     if(isCommandTypeAllowed("amazonMusic")) {
-        doSearchMusicCmd(searchPhrase, "AMAZON_MUSIC")
+        doSearchMusicCmd(searchPhrase, "AMAZON_MUSIC", volume)
         incrementCntByKey("use_cnt_searchAmazon")
     }
 }
 
-def searchTuneIn(String searchPhrase) {
+def searchAppleMusic(String searchPhrase, volume=null) {
+    if(isCommandTypeAllowed("appleMusic")) {
+        doSearchMusicCmd(searchPhrase, "APPLE_MUSIC", volume)
+        incrementCntByKey("use_cnt_searchApple")
+    }
+}
+
+def searchTuneIn(String searchPhrase, volume=null) {
     if(isCommandTypeAllowed("tuneInRadio")) {
-        doSearchMusicCmd(searchPhrase, "TUNE_IN")
+        doSearchMusicCmd(searchPhrase, "TUNE_IN", volume)
         incrementCntByKey("use_cnt_searchTuneIn")
     }
 }
 
-def searchPandora(String searchPhrase) {
+def searchPandora(String searchPhrase, volume=null) {
     if(isCommandTypeAllowed("pandoraRadio")) {
-        doSearchMusicCmd(searchPhrase, "PANDORA")
+        doSearchMusicCmd(searchPhrase, "PANDORA", volume)
         incrementCntByKey("use_cnt_searchPandora")
     }
 }
 
-def searchSpotify(String searchPhrase) {
+def searchSiriusXm(String searchPhrase, volume=null) {
+    if(isCommandTypeAllowed("siriusXm")) {
+        doSearchMusicCmd(searchPhrase, "SIRIUSXM", volume)
+        incrementCntByKey("use_cnt_searchSiriusXM")
+    }
+}
+
+def searchSpotify(String searchPhrase, volume=null) {
     if(isCommandTypeAllowed("spotify")) {
-        doSearchMusicCmd(searchPhrase, "SPOTIFY")
+        doSearchMusicCmd(searchPhrase, "SPOTIFY", volume)
         incrementCntByKey("use_cnt_searchSpotify")
     }
 }
 
-def searchIheart(String searchPhrase) {
+def searchIheart(String searchPhrase, volume=null) {
     if(isCommandTypeAllowed("iHeartRadio")) {
-        doSearchMusicCmd(searchPhrase, "I_HEART_RADIO")
+        doSearchMusicCmd(searchPhrase, "I_HEART_RADIO", volume)
         incrementCntByKey("use_cnt_searchIheart")
     }
 }
@@ -1303,14 +1371,14 @@ private doSequenceCmd(cmdType, seqCmd, seqVal="") {
     } else { log.warn "doSequenceCmd Error | You are missing one of the following... SerialNumber: ${state?.serialNumber}" }
 }
 
-private doSearchMusicCmd(searchPhrase, musicProvId) {
+private doSearchMusicCmd(searchPhrase, musicProvId, volume=null) {
     if(state?.serialNumber && searchPhrase && musicProvId) {
-        playMusicProvider(searchPhrase, musicProvId)
+        playMusicProvider(searchPhrase, musicProvId, volume)
         incrementCntByKey("use_cnt_searchMusic")
     } else { log.warn "doSearchMusicCmd Error | You are missing one of the following... SerialNumber: ${state?.serialNumber} | searchPhrase: ${searchPhrase} | musicProvider: ${musicProvId}" }
 }
 
-private playMusicProvider(searchPhrase, providerId) {
+private playMusicProvider(searchPhrase, providerId, volume=null) {
     logger("trace", "playMusicProvider() command received... | searchPhrase: $searchPhrase | providerId: $providerId")
     if (options?.searchPhrase == "") { log.error 'PlayMusicProvider Searchphrase empty'; return; }
     Map validObj = [
@@ -1334,7 +1402,7 @@ private playMusicProvider(searchPhrase, providerId) {
         requestContentType: "application/json",
         contentType: "application/json",
         body: validObj
-    ], [cmdDesc: "PlayMusicValidate(${type})", validObj: validObj])
+    ], [cmdDesc: "PlayMusicValidate(${type})", validObj: validObj, volume: volume])
 }
 
 def setWakeWord(String newWord) {
@@ -1676,7 +1744,7 @@ private speakVolumeCmd(headers=[:], isQueueCmd=false) {
     // if(!isQueueCmd) { log.trace "speakVolumeCmd(${headers?.cmdDesc}, $isQueueCmd)" }
     def random = new Random()
     def randCmdId = random?.nextInt(300)
-    if(!isAuthOk()) {return}
+    
     Map queryMap = [:]
     List logItems = []
     String healthStatus = getHealthStatus()
@@ -1935,6 +2003,9 @@ Map createSequenceNode(command, value) {
                 break
             case "playsearch":
                 seqNode?.type = "Alexa.Music.PlaySearchPhrase"
+                break
+            case "stop":
+                seqNode?.type = "Alexa.AudioPlayer.Stop"
                 break
             case "volume":
                 seqNode?.type = "Alexa.DeviceControls.Volume"
