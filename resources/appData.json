@@ -2,10 +2,10 @@
     "appDataVer": "1.0",
     "versions": {
         "mainApp": {
-            "ver": "2.3.2"
+            "ver": "2.4.0"
         },
         "echoDevice": {
-            "ver": "2.3.2"
+            "ver": "2.4.0"
         },
         "server": {
             "ver": "2.1.1"
@@ -217,6 +217,16 @@
             "image": "dash_wand",
             "allowTTS": false,
             "blocked": true
+        },
+        "A2LH725P8DQR2A": {
+            "name": "Fabriq Riff",
+            "image": "fabriq_riff",
+            "allowTTS": true
+        },
+        "A3QPPX1R9W5RJV": {
+            "name": "Fabriq Chorus",
+            "image": "fabriq_chorus",
+            "allowTTS": true
         }
     }
 }
