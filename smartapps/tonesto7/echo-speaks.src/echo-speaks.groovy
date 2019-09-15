@@ -17,25 +17,26 @@
 import groovy.json.*
 import groovy.time.TimeCategory
 import java.text.SimpleDateFormat
-String appVersion()   { return "3.0.0.5" }
-String appModified()  { return "2019-09-03" }
+String appVersion()   { return "3.0.0.8" }
+String appModified()  { return "2019-09-09" }
 String appAuthor()    { return "Anthony S." }
 Boolean isBeta()      { return true }
 Boolean isST()        { return (getPlatform() == "SmartThings") }
-Map minVersions()     { return [echoDevice: 3004, actionApp: 3004, server: 222] } //These values define the minimum versions of code this app will work with.
+Map minVersions()     { return [echoDevice: 3008, actionApp: 3008, server: 222] } //These values define the minimum versions of code this app will work with.
 // TODO: Change importURL back to master branch
 // TODO: Change docs link to public docs for release
 // TODO: Add in Actions to the metrics
 // TODO: Add the ability to duplicate an existing action (Web based?)
+// TODO: Add automated call to updated() using healthCheck every few days to make sure everything stays running.
 definition(
     name        : "Echo Speaks",
     namespace   : "tonesto7",
     author      : "Anthony Santilli",
     description : "Integrate your Amazon Echo devices into your Smart Home environment to create virtual Echo Devices. This allows you to speak text, make announcements, control media playback including volume, and many other Alexa features.",
     category    : "My Apps",
-    iconUrl     : "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_speaks.1x${state?.updateAvailable ? "_update" : ""}.png",
-    iconX2Url   : "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_speaks.2x${state?.updateAvailable ? "_update" : ""}.png",
-    iconX3Url   : "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_speaks.3x${state?.updateAvailable ? "_update" : ""}.png",
+    iconUrl     : "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_speaks_3.1x${state?.updateAvailable ? "_update" : ""}.png",
+    iconX2Url   : "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_speaks_3.2x${state?.updateAvailable ? "_update" : ""}.png",
+    iconX3Url   : "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_speaks_3.3x${state?.updateAvailable ? "_update" : ""}.png",
     importUrl   : "https://raw.githubusercontent.com/tonesto7/echo-speaks/beta/smartapps/tonesto7/echo-speaks.src/echo-speaks.groovy",
     oauth       : true,
     pausable    : true
@@ -76,7 +77,7 @@ def startPage() {
     state?.childInstallOkFlag = false
     if(!state?.resumeConfig && state?.isInstalled) { checkGuardSupport() }
     if(state?.resumeConfig || (state?.isInstalled && !state?.serviceConfigured)) { return servPrefPage() }
-    else if(isBeta() || showChgLogOk()) { return changeLogPage() }
+    else if(showChgLogOk()) { return changeLogPage() }
     else if(showDonationOk()) { return donationPage() }
     else { return mainPage() }
 }
@@ -431,7 +432,7 @@ def actionsPage() {
                     if(settings?.unpauseChildActions) { settingUpdate("unpauseChildActions", "false", "bool"); runIn(3, "executeActionUnpause"); }
                 }
                 input "reinitChildActions", "bool", title: inTS("Force Refresh all actions?", getAppImg("reset", true)), defaultValue: false, submitOnChange: true, image: getAppImg("reset")
-                if(settings?.reinitChildActions) { settingUpdate("reinitChildActions", "false", "bool"); runIn(3, "executeActionUnpause"); }
+                if(settings?.reinitChildActions) { settingUpdate("reinitChildActions", "false", "bool"); runIn(3, "executeActionUpdate"); }
             }
         }
         state.childInstallOkFlag = true
@@ -443,6 +444,9 @@ private executeActionPause() {
 }
 private executeActionUnpause() {
     getActionApps()?.findAll { it?.isPaused() == true }?.each { it?.updatePauseState(false) }
+}
+private executeActionUpdate() {
+    getActionApps()?.each { it?.updated() }
 }
 
 def devicePrefsPage() {
@@ -628,8 +632,6 @@ Map getAllDevices(isInputEnum=false) {
     return isInputEnum ? (devMap?.size() ? devMap?.collectEntries { [(it?.key):it?.value?.name] } : devMap) : devMap
 }
 
-
-
 def notifPrefPage() {
     dynamicPage(name: "notifPrefPage", install: false) {
         Integer pollWait = 900
@@ -644,6 +646,9 @@ def notifPrefPage() {
         section(sTS("SMS Text Messaging:")) {
             paragraph "To send to multiple numbers separate the number by a comma\nE.g. 8045551122,8046663344"
             input "smsNumbers", "text", title: inTS("Send SMS to Text to...\n(Optional)", getAppImg("sms_phone", true)), required: false, submitOnChange: true, image: getAppImg("sms_phone")
+        }
+        section (sTS("Notification Devices:")) {
+            input "notif_devs", "device.notification", title: inTS("Send to Notification devices?", getAppImg("notification", true)), required: false, multiple: true, submitOnChange: true, image: getAppImg("notification")
         }
         section(sTS("Pushover Support:")) {
             input ("pushoverEnabled", "bool", title: inTS("Use Pushover Integration", getAppImg("pushover", true)), description: "requires Pushover Manager app.", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("pushover"))
@@ -663,8 +668,8 @@ def notifPrefPage() {
                 } else { paragraph pTS("New Install Detected!!!\n\n1. Press Done to Finish the Install.\n2. Goto the Automations Tab at the Bottom\n3. Tap on the SmartApps Tab above\n4. Select ${app?.getLabel()} and Resume configuration", getAppImg("info", true), false, "#2784D9"), state: "complete" }
             }
         }
-        if(settings?.smsNumbers?.toString()?.length()>=10 || settings?.usePush || (settings?.pushoverEnabled && settings?.pushoverDevices)) {
-            if((settings?.usePush || (settings?.pushoverEnabled && settings?.pushoverDevices)) && !state?.pushTested && state?.pushoverManager) {
+        if(settings?.smsNumbers?.toString()?.length()>=10 || settings?.notif_devs || settings?.usePush || (settings?.pushoverEnabled && settings?.pushoverDevices)) {
+            if((settings?.usePush || settings?.notif_devs || (settings?.pushoverEnabled && settings?.pushoverDevices)) && !state?.pushTested && state?.pushoverManager) {
                 if(sendMsg("Info", "Push Notification Test Successful. Notifications Enabled for ${app?.label}", true)) {
                     state.pushTested = true
                 }
@@ -990,7 +995,7 @@ def musicSearchTestPage() {
             if(musicTestProvider) {
                 input "musicTestQuery", "text", title: inTS("Music Search term to test on Device", getAppImg("search2", true)), defaultValue: null, required: false, submitOnChange: true, image: getAppImg("search2")
                 if(settings?.musicTestQuery) {
-                    input "musicTestDevice", "device.EchoSpeaksDevice", title: inTS("Select a Device to Test Music Search", getAppImg("echo_speaks.1x", true)), description: "Tap to select", multiple: false, required: false, submitOnChange: true, image: getAppImg("echo_speaks.1x")
+                    input "musicTestDevice", "device.EchoSpeaksDevice", title: inTS("Select a Device to Test Music Search", getAppImg("echo_speaks_3.1x", true)), description: "Tap to select", multiple: false, required: false, submitOnChange: true, image: getAppImg("echo_speaks_3.1x")
                     if(musicTestDevice) {
                         input "performMusicTest", "bool", title: inTS("Perform the Music Search Test?", getAppImg("music", true)), description: "", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("music")
                         if(performMusicTest) { executeMusicSearchTest() }
@@ -1106,6 +1111,7 @@ def updated() {
 def initialize() {
     if(app?.getLabel() != "Echo Speaks") { app?.updateLabel("Echo Speaks") }
     if(settings?.optOutMetrics == true && state?.appGuid) { if(removeInstallData()) { state?.appGuid = null } }
+    subscribe(app, onAppTouch)
     if((settings?.guardHomeAlarm && settings?.guardAwayAlarm) || settings?.guardHomeModes || settings?.guardAwayModes || settings?.guardAwayPresence) {
         if(settings?.guardAwayAlarm && settings?.guardHomeAlarm) {
             subscribe(location, "${!isST() ? "hsmStatus" : "alarmSystemStatus"}", guardTriggerEvtHandler)
@@ -1422,40 +1428,50 @@ def clearServerAuth() {
     }
 }
 
-private runCookieRefresh() {
-    settingUpdate("refreshCookie", "false", "bool")
-    if(getLastCookieRefreshSec() < 86400) { log.error "Cookie Refresh is blocked... | Last refresh was less than 24 hours ago."; return; }
+Integer getLastServerWakeSec() { return !state?.lastServerWakeDt ? 500000 : GetTimeDiffSeconds(state?.lastServerWakeDt, "getLastServerWakeSec").toInteger() }
+
+private wakeupServer(refreshCookie=false) {
     Map params = [
         uri: getServerHostURL(),
         path: "/config",
         contentType: "text/html",
         requestContentType: "text/html"
     ]
-    execAsyncCmd("get", "wakeUpServerResp", params, [execDt: now()])
+    execAsyncCmd("get", "wakeupServerResp", params, [execDt: now(), refreshCookie: refreshCookie])
 }
 
-def wakeUpServerResp(response, data) {
+private runCookieRefresh() {
+    settingUpdate("refreshCookie", "false", "bool")
+    if(getLastCookieRefreshSec() < 86400) { log.error "Cookie Refresh is blocked... | Last refresh was less than 24 hours ago."; return; }
+    wakeupServer(true)
+}
+
+def wakeupServerResp(response, data) {
     Boolean hasErr = (response?.hasError() == true)
     String errMsg = (hasErr && response?.getErrorMessage()) ? response?.getErrorMessage() : null
-    if(!respIsValid(response?.status, hasErr, errMsg, "wakeUpServerResp")) {return}
+    if(!respIsValid(response?.status, hasErr, errMsg, "wakeupServerResp")) {return}
     def rData = null
     try { rData = response?.data ?: null }
-    catch(ex) { logError("wakeUpServerResp Exception: ${ex?.message}") }
+    catch(ex) { logError("wakeupServerResp Exception: ${ex?.message}") }
     if (rData) {
         // log.debug "rData: $rData"
         state?.lastServerWakeDt = getDtNow()
-        logInfo("wakeUpServer Completed... | Process Time: (${data?.execDt ? (now()-data?.execDt) : 0}ms)")
-        Map cookieData = state?.cookieData ?: [:]
-        if (!cookieData || !cookieData?.loginCookie || !cookieData?.refreshToken) {
-            logError("Required Registration data is missing for Cookie Refresh")
-            return
-        }
-        Map params = [
-            uri: getServerHostURL(),
-            path: "/refreshCookie"
-        ]
-        execAsyncCmd("get", "cookieRefreshResp", params, [execDt: now()])
+        logInfo("wakeupServer Completed... | Process Time: (${data?.execDt ? (now()-data?.execDt) : 0}ms)")
+        if(data?.refreshCookie == true) { runIn(2, "cookieRefresh") }
     }
+}
+
+private cookieRefresh() {
+    Map cookieData = state?.cookieData ?: [:]
+    if (!cookieData || !cookieData?.loginCookie || !cookieData?.refreshToken) {
+        logError("Required Registration data is missing for Cookie Refresh")
+        return
+    }
+    Map params = [
+        uri: getServerHostURL(),
+        path: "/refreshCookie"
+    ]
+    execAsyncCmd("get", "cookieRefreshResp", params, [execDt: now()])
 }
 
 def cookieRefreshResp(response, data) {
@@ -1709,42 +1725,43 @@ public def getAlexaRoutines(autoId=null, utterOnly=false) {
     Map params = [
         uri: getAmazonUrl(),
         path: "/api/behaviors/automations${autoId ? "/${autoId}" : ""}",
-        query: [ limit: limit ],
+        query: [ limit: 100 ],
         headers: [cookie: getCookieVal(), csrf: getCsrfVal()],
         requestContentType: "application/json",
         contentType: "application/json"
     ]
-
-    def routineResp = makeSyncHttpReq(params, "get", "getAlexaRoutines") ?: [:]
-    // log.debug "routineResp: $routineResp"
-    if(routineResp) {
-        if(autoId) {
-            return routineResp
-        } else {
-            Map items = [:]
-            Integer cnt = 1
-            if(routineResp?.size()) {
-                routineResp?.findAll { it?.status == "ENABLED" }?.each { item->
-                    if(utterOnly) {
-                        if(item?.triggers?.size()) {
-                            item?.triggers?.each { trg->
-                                if(trg?.payload?.containsKey("utterance") && trg?.payload?.utterance != null) {
-                                    items[item?.automationId] = trg?.payload?.utterance as String
-                                } else {
-                                    items[item?.automationId] = "Unlabeled Routine ($cnt)"
-                                    cnt++
+    try {
+        def routineResp = makeSyncHttpReq(params, "get", "getAlexaRoutines") ?: [:]
+        // log.debug "routineResp: $routineResp"
+        if(routineResp) {
+            if(autoId) {
+                return routineResp
+            } else {
+                Map items = [:]
+                Integer cnt = 1
+                if(routineResp?.size()) {
+                    routineResp?.findAll { it?.status == "ENABLED" }?.each { item->
+                        if(utterOnly) {
+                            if(item?.triggers?.size()) {
+                                item?.triggers?.each { trg->
+                                    if(trg?.payload?.containsKey("utterance") && trg?.payload?.utterance != null) {
+                                        items[item?.automationId] = trg?.payload?.utterance as String
+                                    } else {
+                                        items[item?.automationId] = "Unlabeled Routine ($cnt)"
+                                        cnt++
+                                    }
                                 }
                             }
+                        } else {
+                            items[item?.automationId] = item?.name
                         }
-                    } else {
-                        items[item?.automationId] = item?.name
                     }
                 }
+                // log.debug "routine items: $items"
+                return items
             }
-            // log.debug "routine items: $items"
-            return items
         }
-    }
+    } catch(ex) { logError("getAlexaRoutines Error: ${ex}"); return [:]; }
 }
 
 def executeRoutineById(String routineId) {
@@ -2318,7 +2335,10 @@ private healthCheck() {
         return
     }
     validateCookieAsync()
-    if(getLastCookieRefreshSec() > cookieRefreshSeconds()) { runCookieRefresh() }
+    if(getLastCookieRefreshSec() > cookieRefreshSeconds()) {
+        runCookieRefresh()
+    } else if(getLastServerWakeSec() > 86400) { wakeupServer() }
+
     if(!getOk2Notify()) { return }
     missPollNotify((settings?.sendMissedPollMsg == true), (state?.misPollNotifyMsgWaitVal ?: 3600))
     appUpdateNotify()
@@ -2401,12 +2421,13 @@ Integer getLastChildInitRefreshSec() { return !state?.lastChildInitRefreshDt ? 3
 Boolean getOk2Notify() {
     Boolean smsOk = (settings?.smsNumbers?.toString()?.length()>=10)
     Boolean pushOk = settings?.usePush
+    Boolean notifDevs = (settings?.notif_devs?.size())
     Boolean pushOver = (settings?.pushoverEnabled && settings?.pushoverDevices)
     Boolean daysOk = quietDaysOk(settings?.quietDays)
     Boolean timeOk = quietTimeOk()
     Boolean modesOk = quietModesOk(settings?.quietModes)
     logDebug("getOk2Notify() | smsOk: $smsOk | pushOk: $pushOk | pushOver: $pushOver || daysOk: $daysOk | timeOk: $timeOk | modesOk: $modesOk")
-    if(!(smsOk || pushOk || pushOver)) { return false }
+    if(!(smsOk || pushOk || notifDevs || pushOver)) { return false }
     if(!(daysOk && modesOk && timeOk)) { return false }
     return true
 }
@@ -2473,6 +2494,12 @@ public sendMsg(String msgTitle, String msg, Boolean showEvt=true, Map pushoverMa
                 buildPushMessage(settings?.pushoverDevices, msgObj, true)
                 sent = true
             }
+            if(settings?.notif_devs) {
+                sentstr = "Notification Devices"
+                settings?.notif_devs?.each { it?.deviceNotification(msg as String) }
+                sent = true
+            }
+
             String smsPhones = sms ? sms.toString() : (settings?.smsNumbers?.toString() ?: null)
             if(smsPhones) {
                 List phones = smsPhones?.toString()?.split("\\,")
@@ -2552,15 +2579,16 @@ Integer getDaysSinceUpdated() {
 }
 
 String changeLogData() { return getWebData([uri: "https://raw.githubusercontent.com/tonesto7/echo-speaks/${isBeta() ? "beta" : "master"}/resources/changelog.txt", contentType: "text/plain; charset=UTF-8"], "changelog") }
-Boolean showChgLogOk() { return (state?.isInstalled && state?.installData?.shownChgLog != true) }
+Boolean showChgLogOk() { return (state?.isInstalled && (state?.curAppVer != appVersion() || state?.installData?.shownChgLog != true)) }
 def changeLogPage() {
     def execTime = now()
     return dynamicPage(name: "changeLogPage", title: "", nextPage: "mainPage", install: false) {
         section() {
-            paragraph title: "Release Notes for (v${appVersion()}${isBeta() ? " Beta" : ""}):\nThis will show on every load until out of beta.", pTS(isST() ? "" : "Release Notes for (v${appVersion()}${isBeta() ? " Beta" : ""}):\nThis will show on every load until out of beta.", getAppImg("whats_new", true), true), state: "complete", image: getAppImg("whats_new")
+            paragraph title: "Release Notes for (v${appVersion()}${isBeta() ? " Beta" : ""})", pTS(isST() ? "" : "Release Notes for (v${appVersion()}${isBeta() ? " Beta" : ""})", getAppImg("whats_new", true), true), state: "complete", image: getAppImg("whats_new")
             paragraph pTS(changeLogData(), null, false, "gray")
         }
         Map iData = atomicState?.installData ?: [:]
+        state?.curAppVer = appVersion()
         iData["shownChgLog"] = true
         atomicState?.installData = iData
     }
@@ -3119,7 +3147,7 @@ def appInfoSect()	{
         str += (state?.appData && state?.appData?.appDataVer) ? bulletItem(str, "Config: (v${state?.appData?.appDataVer})") : ""
     }
     section() {
-        href "changeLogPage", title: inTS("${app?.name} (v${appVersion()})", getAppImg("echo_speaks.2x", true), null, false), description: str, image: getAppImg("echo_speaks.2x")
+        href "changeLogPage", title: inTS("${app?.name} (v${appVersion()})", getAppImg("echo_speaks_3.2x", true), null, false), description: str, image: getAppImg("echo_speaks_3.2x")
         if(!state?.isInstalled) {
             paragraph pTS("--NEW Install--", null, true, "#2784D9"), state: "complete"
         } else {
@@ -3246,7 +3274,7 @@ def renderConfig() {
     <body>
         <div style="margin: 0 auto; max-width: 600px;">
             <form class="p-1">
-                <div class="my-3 text-center"><span><img src="${getAppImg("echo_speaks.1x", true)}"/><p class="h4 text-center">Echo Speaks</p></span></div>
+                <div class="my-3 text-center"><span><img src="${getAppImg("echo_speaks_3.1x", true)}"/><p class="h4 text-center">Echo Speaks</p></span></div>
                 <hr>
                 ${oStr}
 
@@ -3350,6 +3378,7 @@ def renderTextEditPage() {
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Type" data-ssml="evttype">
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Value" data-ssml="evtvalue">
                                                                 <input class="ssml-button" type="button" unselectable="on" value="DeviceName" data-ssml="evtname">
+                                                                <input class="ssml-button" type="button" unselectable="on" value="Unit" data-ssml="evtunit">
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Date" data-ssml="evtdate">
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Time" data-ssml="evttime">
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Date/Time" data-ssml="evtdatetime">
@@ -3608,7 +3637,7 @@ def renderTextEditPage() {
                                         title: 'Echo Speaks Actions',
                                         text: 'Responses saved successfully!',
                                         type: 'success',
-                                        icon: 'https://github.com/tonesto7/echo-speaks/raw/master/resources/icons/echo_speaks.1x.png',
+                                        icon: 'https://github.com/tonesto7/echo-speaks/raw/master/resources/icons/echo_speaks_3.1x.png',
                                         timeout: 4500,
                                         callback: function() { this.hide() }
                                     });
@@ -3792,6 +3821,9 @@ def renderTextEditPage() {
                                     break;
                                 case 'evtdate':
                                     insertSsml(editor, '%date%', false);
+                                    break;
+                                case 'evtunit':
+                                    insertSsml(editor, '%unit%', false);
                                     break;
                                 case 'evttime':
                                     insertSsml(editor, '%time%', false);
@@ -3998,17 +4030,11 @@ private addToLogHistory(String logKey, msg, Integer max=10) {
 	if(eData?.size() > max) { eData = eData?.drop( (eData?.size()-max)+1 ) }
 	atomicState[logKey as String] = eData
 }
-private logDebug(msg) { if(settings?.logDebug == true) { log.debug msg } }
-private logInfo(msg) { if(settings?.logInfo != false) { log.info msg } }
-private logTrace(msg) { if(settings?.logTrace == true) { log.trace msg } }
-private logWarn(msg) {
-    if(settings?.logWarn != false) { log.warn msg }
-    addToLogHistory("warnHistory", msg, 10)
-}
-private logError(msg) {
-    if(settings?.logError != false) { log.error msg }
-    addToLogHistory("errorHistory", msg, 10)
-}
+private logDebug(msg) { if(settings?.logDebug == true) { log.debug "EchoApp (v${appVersion()}) | ${msg}" } }
+private logInfo(msg) { if(settings?.logInfo != false) {  log.info " EchoApp (v${appVersion()}) | ${msg}" } }
+private logTrace(msg) { if(settings?.logTrace == true) { log.trace "EchoApp (v${appVersion()}) | ${msg}" } }
+private logWarn(msg, noHist=false) { if(settings?.logWarn != false) { log.warn " EchoApp (v${appVersion()}) | ${msg}"; }; if(!noHist) { addToLogHistory("warnHistory", msg, 10); } }
+private logError(msg) {if(settings?.logError != false) { log.error "EchoApp (v${appVersion()}) | ${msg}"; }; addToLogHistory("errorHistory", msg, 10); }
 
 Map getLogHistory() {
     return [ warnings: atomicState?.warnHistory ?: [], errors: atomicState?.errorHistory ?: [] ]
