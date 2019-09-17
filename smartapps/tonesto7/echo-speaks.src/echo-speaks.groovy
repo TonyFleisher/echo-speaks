@@ -17,17 +17,14 @@
 import groovy.json.*
 import groovy.time.TimeCategory
 import java.text.SimpleDateFormat
-String appVersion()   { return "3.0.0.8" }
-String appModified()  { return "2019-09-09" }
+String appVersion()   { return "3.0.1.4" }
+String appModified()  { return "2019-09-16" }
 String appAuthor()    { return "Anthony S." }
-Boolean isBeta()      { return true }
+Boolean isBeta()      { return false }
 Boolean isST()        { return (getPlatform() == "SmartThings") }
-Map minVersions()     { return [echoDevice: 3008, actionApp: 3008, server: 222] } //These values define the minimum versions of code this app will work with.
-// TODO: Change importURL back to master branch
-// TODO: Change docs link to public docs for release
+Map minVersions()     { return [echoDevice: 3012, actionApp: 3012, server: 222] } //These values define the minimum versions of code this app will work with.
 // TODO: Add in Actions to the metrics
 // TODO: Add the ability to duplicate an existing action (Web based?)
-// TODO: Add automated call to updated() using healthCheck every few days to make sure everything stays running.
 definition(
     name        : "Echo Speaks",
     namespace   : "tonesto7",
@@ -37,7 +34,7 @@ definition(
     iconUrl     : "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_speaks_3.1x${state?.updateAvailable ? "_update" : ""}.png",
     iconX2Url   : "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_speaks_3.2x${state?.updateAvailable ? "_update" : ""}.png",
     iconX3Url   : "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_speaks_3.3x${state?.updateAvailable ? "_update" : ""}.png",
-    importUrl   : "https://raw.githubusercontent.com/tonesto7/echo-speaks/beta/smartapps/tonesto7/echo-speaks.src/echo-speaks.groovy",
+    importUrl   : "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/smartapps/tonesto7/echo-speaks.src/echo-speaks.groovy",
     oauth       : true,
     pausable    : true
 )
@@ -101,7 +98,9 @@ def mainPage() {
                     String gStateIcon = gState == "Unknown" ? "alarm_disarm" : (gState == "Away" ? "alarm_away" : "alarm_home")
                     href "alexaGuardPage", title: inTS("Alexa Guard Control", getAppImg(gStateIcon, true)), image: getAppImg(gStateIcon), state: guardAutoConfigured() ? "complete" : null,
                             description: "Current Status: ${gState}${guardAutoConfigured() ? "\nAutomation: Enabled" : ""}\n\nTap to proceed..."
-                } else { paragraph "Alexa Guard is not enabled or supported by any of your Echo Devices", image: getAppImg(gStateIcon) }
+                } else if (state?.guardDataOverMaxSize == true) {
+                    paragraph pTS("Because you have a lot of devices attached to your Alexa account the response size is larger than ST allows.  The request is being made using your server... On next page load you should see the status.\n\nPlease make sure you are running server version 2.3 or higher.", null, false, "gray")
+                } else { paragraph pTS("Alexa Guard is not enabled or supported by any of your Echo Devices", null, false, "gray") }
             }
 
             section(sTS("Alexa Devices:")) {
@@ -197,7 +196,7 @@ def authStatusPage() {
                 input "refreshDevCookies", "bool", title: inTS("Resend Cookies to Devices?", getAppImg("reset", true)), description: "Forces devices to syncronize the stored cookies with the main app.", required: false, defaultValue: false, submitOnChange: true, image: getAppImg("reset")
                 if(!isST()) { paragraph pTS("Forces devices to syncronize their stored cookies with the main app.", null, false, "gray") }
                 if(settings?.refreshCookie) { settingUpdate("refreshCookie", "false", "bool"); runIn(2, "runCookieRefresh"); }
-                if(settings?.resetCookies) { clearCookieData() }
+                if(settings?.resetCookies) { clearCookieData("resetCookieToggle") }
                 if(settings?.refreshDevCookies) { refreshDevCookies() }
             }
         }
@@ -392,8 +391,8 @@ def guardTriggerEvtHandler(evt) {
             setGuardHome()
         }
         if(newState == "ARMED_AWAY") {
-            if(settings?.guardAwayDelay) { logWarn("Setting Alexa Guard Mode to Away in (${settings?.guardAwayDelay} seconds)"); runIn(settings?.guardAwayDelay, "setGuardAway"); }
-            else { setGuardAway(); logWarn("Setting Alexa Guard Mode to Away..."); }
+            if(settings?.guardAwayDelay) { logWarn("Setting Alexa Guard Mode to Away in (${settings?.guardAwayDelay} seconds)", true); runIn(settings?.guardAwayDelay, "setGuardAway"); }
+            else { setGuardAway(); logWarn("Setting Alexa Guard Mode to Away...", true); }
         }
     }
 }
@@ -533,9 +532,10 @@ def settingsPage() {
         section(sTS("App Change Details:")) {
             href "changeLogPage", title: inTS("View App Revision History", getAppImg("change_log", true)), description: "Tap to view", image: getAppImg("change_log")
         }
-        section(sTS("Diagnostic Data:"), hideable: true, hidden: true) {
+        section(sTS("Diagnostic Data:")) {
             paragraph pTS("If you are having trouble send a private message to the developer with a link to this page that is shown below.", null, false, "gray")
-            href url: getAppEndpointUrl("diagData"), type: "external", title: inTS("Diagnostic Data (JSON)"), description: "Tap to view"
+            input "diagShareSensitveData", "bool", title: inTS("Share Cookie Data?", getAppImg("question", true)), required: false, defaultValue: false, submitOnChange: true, image: getAppImg("question")
+            href url: getAppEndpointUrl("diagData"), style: "external", title: inTS("Diagnostic Data"), description: "Tap to view"
         }
     }
 }
@@ -959,7 +959,7 @@ private executeSequence() {
     if(settings?.sequenceDevice?.hasCommand("executeSequenceCommand")) {
         settings?.sequenceDevice?.executeSequenceCommand(seqStr as String)
     } else {
-        logWarn("sequence test device doesn't support the executeSequenceCommand command...")
+        logWarn("sequence test device doesn't support the executeSequenceCommand command...", true)
     }
 }
 
@@ -1145,7 +1145,7 @@ def uninstalled() {
     unschedule()
     if(settings?.optOutMetrics != true) { if(removeInstallData()) { state?.appGuid = null } }
     clearCloudConfig()
-    clearCookieData()
+    clearCookieData("App Uninstalled")
     removeDevices(true)
 }
 
@@ -1177,6 +1177,8 @@ mappings {
     path("/textEditor/:cId/:inName")    { action: [GET: "renderTextEditPage", POST: "textEditProcessing"] }
     path("/cookie")                     { action: [GET: "getCookieData", POST: "storeCookieData", DELETE: "clearCookieData"] }
     path("/diagData")                   { action: [GET: "getDiagData"] }
+    path("/diagCmds/:cmd")              { action: [GET: "execDiagCmds"] }
+    path("/diagDataJson")               { action: [GET: "getDiagDataJson"] }
 }
 
 String getCookieVal() { return (state?.cookieData && state?.cookieData?.localCookie) ? state?.cookieData?.localCookie as String : null }
@@ -1359,6 +1361,7 @@ def clearCookieData(src=null) {
     state?.authValid = false
     state?.remove("cookie")
     state?.remove("cookieData")
+    state?.remove("lastCookieChkDt")
     state?.remove("lastCookieRefresh")
     unschedule("getEchoDevices")
     unschedule("getOtherData")
@@ -1372,13 +1375,14 @@ private refreshDevCookies() {
     logDebug("Re-Syncing Cookie Data with Devices")
     Boolean isValid = (state?.authValid && getCookieVal() != null && getCsrfVal() != null)
     updateChildAuth(isValid)
+    return isValid
 }
 
 private updateChildAuth(Boolean isValid) {
     (isST() ? app?.getChildDevices(true) : getChildDevices())?.each { (isValid) ? it?.updateCookies([cookie: getCookieVal(), csrf: getCsrfVal()]) : it?.removeCookies(true); }
 }
 
-private authEvtHandler(Boolean isAuth) {
+private authEvtHandler(Boolean isAuth, String src=null) {
     // log.debug "authEvtHandler(${isAuth})"
     state?.authValid = (isAuth == true)
     if(isAuth == false && !state?.noAuthActive) {
@@ -1387,6 +1391,7 @@ private authEvtHandler(Boolean isAuth) {
         sendMsg("${app.name} Amazon Login Issue", "Amazon Cookie Has Expired or is Missing!!! Please login again using the Heroku Web Config page...")
         runEvery1Hour("noAuthReminder")
         state?.noAuthActive = true
+        state?.authEvtClearReason = [dt: getDtNow(), src: src]
         updateChildAuth(isAuth)
     } else {
         if(state?.noAuthActive) {
@@ -1399,7 +1404,7 @@ private authEvtHandler(Boolean isAuth) {
 
 Boolean isAuthValid(methodName) {
     if(state?.authValid == false) {
-        logWarn("Echo Speaks Authentication is no longer valid... Please login again and commands will be allowed again!!! | Method: (${methodName})")
+        logWarn("Echo Speaks Authentication is no longer valid... Please login again and commands will be allowed again!!! | Method: (${methodName})", true)
         return false
     }
     return true
@@ -1509,6 +1514,7 @@ Boolean validateCookie() {
         httpGet(params) { resp->
             if(resp?.status == 401) {
                 logError("validateCookie Status: (${resp.status})")
+                authValidationEvent(valid, "validateCookie_${resp?.status}")
                 state?.lastCookieChkDt = getDtNow()
                 return false
             }
@@ -1521,6 +1527,7 @@ Boolean validateCookie() {
             }
             state?.lastCookieChkDt = getDtNow()
             // logDebug("Cookie Validation: (${valid}) | Process Time: (${(now()-data?.execDt)}ms)")
+            authValidationEvent(valid, "validateCookie")
             return valid
         }
     } catch(ex) {
@@ -1531,7 +1538,8 @@ Boolean validateCookie() {
 }
 
 private validateCookieAsync(frc=false) {
-    if((!frc && getLastCookieChkSec() <= 1800) || !getCookieVal() || !getCsrfVal()) { return }
+    //Changed amazon auth validation to every 15 min instead of 30
+    if((!frc && getLastCookieChkSec() <= 900) || !getCookieVal() || !getCsrfVal()) { return }
     try {
         def params = [uri: getAmazonUrl(), path: "/api/bootstrap", query: ["version": 0], headers: [cookie: getCookieVal(), csrf: getCsrfVal()], contentType: "application/json"]
         execAsyncCmd("get", "cookieValidResp", params, [execDt: now()])
@@ -1545,7 +1553,7 @@ def cookieValidResp(response, data) {
     // logTrace("cookieValidResp...")
     if(response?.status == 401) {
         logError("cookieValidResp Status: (${response.status})")
-        authValidationEvent(false)
+        authValidationEvent(false, "cookieValidResp_${response?.status}")
         state?.lastCookieChkDt = getDtNow()
         return
     }
@@ -1559,18 +1567,19 @@ def cookieValidResp(response, data) {
     state?.lastCookieChkDt = getDtNow()
     def execTime = data?.execDt ? (now()-data?.execDt) : 0
     logDebug("Cookie Validation: (${valid}) | Process Time: (${execTime}ms)")
-    authValidationEvent(valid)
+    log.debug("Cookie Validation: (${valid}) | Process Time: (${execTime}ms)")
+    authValidationEvent(valid, "validateCookieAsync")
 }
 
-private authValidationEvent(valid) {
+private authValidationEvent(Boolean valid, String src=null) {
 	Integer listSize = 3
     List eList = atomicState?.authValidHistory ?: [true, true, true]
     eList.push(valid)
-	if(eList?.size() > listSize) { eList = eList?.drop( (eList?.size()-listSize)+1 ) }
+	if(eList?.size() > listSize) { eList = eList?.drop( eList?.size()-listSize ) }
 	atomicState?.authValidHistory = eList
     if(eList?.every { it == false }) {
         logError("The last 3 Authentication Validations have failed | Clearing Stored Auth Data | Please login again using the Echo Speaks service...")
-        authEvtHandler(false)
+        authEvtHandler(false, src)
         return
     } else { authEvtHandler(true) }
 }
@@ -1580,13 +1589,13 @@ private respIsValid(statusCode, Boolean hasErr, errMsg=null, String methodName, 
     if(!hasErr && statusCode == 200) {
         return true
     } else if(statusCode == 401) {
-        authValidationEvent(false)
+        authValidationEvent(false, "respIsValid_${statusCode}")
         return false
     } else {
         if(statusCode > 401 && statusCode < 500) {
             logError("${methodName} Error: ${errMsg ?: null}")
             if(errMsg == "Forbidden") {
-                authValidationEvent(false)
+                authValidationEvent(false, "respIsValid_${statusCode}")
                 return false
             }
         }
@@ -1668,7 +1677,6 @@ private getMusicProviders() {
 private getOtherData() {
     getBluetoothDevices()
     getDoNotDisturb()
-    checkGuardSupport()
 }
 
 private getBluetoothDevices() {
@@ -1777,6 +1785,8 @@ def executeRoutineById(String routineId) {
     }
 }
 
+Integer getLastGuardSupportCheckSec() { return !state?.lastGuardSupportCheck ? 3600 : GetTimeDiffSeconds(state?.lastGuardSupportCheck, "getLastGuardSupportCheckSec").toInteger() }
+
 def checkGuardSupport() {
     if(!isAuthValid("checkGuardSupport")) { return }
     def params = [
@@ -1793,10 +1803,17 @@ def checkGuardSupport() {
 def checkGuardSupportResponse(response, data) {
     // log.debug "checkGuardSupportResponse Resp Size(${response?.data?.toString()?.size()})"
     //TODO: This will fail on ST platform if the json file size returned is greater than 500Kb
-    //TODO: Maybe we can use the server to get the required ID needed to make guard requests
     def resp = parseJson(response?.data?.toString())
     Boolean guardSupported = false
-    if(resp && resp?.networkDetail) {
+    // log.debug "resp length: ${resp?.toString()?.length()}"
+    Boolean pastStLimit = (resp && isST() && resp?.toString()?.length() > 500000)
+    if(resp && pastStLimit) {
+        Map minUpdMap = getMinVerUpdsRequired()
+        if(!minUpdMap?.keySet()?.contains("server")) { runIn(2, checkGuardSupportFromServer) }
+        logInfo("Guard Support Check Response is too large for ST... Checking for Guard Support using the Server")
+        state?.guardDataOverMaxSize = true
+        return
+    } else if(resp && resp?.networkDetail) {
         def details = parseJson(resp?.networkDetail as String)
         def locDetails = details?.locationDetails?.locationDetails?.Default_Location?.amazonBridgeDetails?.amazonBridgeDetails["LambdaBridge_AAA/OnGuardSmartHomeBridgeService"] ?: null
         if(locDetails && locDetails?.applianceDetails && locDetails?.applianceDetails?.applianceDetails) {
@@ -1814,6 +1831,35 @@ def checkGuardSupportResponse(response, data) {
         }
     } else { logError("checkGuardSupportResponse Error | No data received...") }
     state?.alexaGuardSupported = guardSupported
+    state?.lastGuardSupportCheck = getDtNow()
+    state?.guardDataSrc = "app"
+    if(guardSupported) getGuardState()
+}
+
+def checkGuardSupportFromServer() {
+    if(!isAuthValid("checkGuardSupportFromServer")) { return }
+    def params = [
+        uri: getServerHostURL(),
+        path: "/agsData",
+        requestContentType: "application/json",
+        contentType: "application/json",
+    ]
+    execAsyncCmd("get", "checkGuardSupportServerResponse", params, [execDt: now()])
+}
+
+def checkGuardSupportServerResponse(response, data) {
+    Boolean guardSupported = false
+    def resp = response?.json ?: null
+    // log.debug "response: ${resp}"
+    if(resp && resp?.guardData) {
+        // log.debug "AGS Server Resp: ${resp?.guardData}"
+        state?.guardData = resp?.guardData
+        guardSupported = true
+    } else { logError("checkGuardSupportServerResponse Error | No data received...") }
+    state?.alexaGuardSupported = guardSupported
+    state?.guardDataOverMaxSize = guardSupported
+    state?.guardDataSrc = "server"
+    state?.lastGuardSupportCheck = getDtNow()
     if(guardSupported) getGuardState()
 }
 
@@ -1836,6 +1882,7 @@ private getGuardState() {
                 state?.alexaGuardState = guardStateData?.value[0] ? guardStateData?.value[0] : guardStateData?.value
                 settingUpdate("alexaGuardAwayToggle", ((state?.alexaGuardState == "ARMED_AWAY") ? "true" : "false"), "bool")
                 logDebug("Alexa Guard State: (${state?.alexaGuardState})")
+                state?.lastGuardStateCheck = getDtNow()
             }
             // log.debug "GuardState resp: ${respData}"
         }
@@ -1884,6 +1931,7 @@ def setGuardStateResponse(response, data) {
     if(resp && !resp?.errors?.size() && resp?.controlResponses && resp?.controlResponses[0] && resp?.controlResponses[0]?.code && resp?.controlResponses[0]?.code == "SUCCESS") {
         logInfo("Alexa Guard set to (${data?.requestedState}) Successfully!!!")
         state?.alexaGuardState = data?.requestedState
+        state?.lastGuardStateUpd = getDtNow()
     } else { logError("Failed to set Alexa Guard to (${data?.requestedState}) | Reason: ${resp?.errors ?: null}") }
 }
 
@@ -1925,7 +1973,7 @@ def echoDevicesResponse(response, data) {
     List ignoreTypes = getDeviceTypesMap()?.ignore ?: ["A1DL2DVDQVK3Q", "A21Z3CGI8UIP0F", "A2825NDLA7WDZV", "A2IVLV5VM2W81", "A2TF17PFR55MTB", "A1X7HJX9QL16M5", "A2T0P32DY3F7VB", "A3H674413M2EKB", "AILBSA2LNTOYL"]
     List removeKeys = ["appDeviceList", "charging", "macAddress", "deviceTypeFriendlyName", "registrationId", "remainingBatteryLevel", "postalCode", "language"]
     if(response?.status == 401) {
-        authValidationEvent(false)
+        authValidationEvent(false, "echoDevicesResponse_${response?.status}")
         return
     }
     try {
@@ -2187,7 +2235,7 @@ private removeDevices(all=false) {
         settingUpdate("cleanUpDevices", "false", "bool")
         List devList = getDeviceList(true)?.collect { String dni = [app?.id, "echoSpeaks", it?.key].join("|") }
         def items = app.getChildDevices()?.findResults { (all || (!all && !devList?.contains(it?.deviceNetworkId as String))) ? it?.deviceNetworkId as String : null }
-        logWarn("removeDevices(${all ? "all" : ""}) | In Use: (${all ? 0 : devList?.size()}) | Removing: (${items?.size()})")
+        logWarn("removeDevices(${all ? "all" : ""}) | In Use: (${all ? 0 : devList?.size()}) | Removing: (${items?.size()})", true)
         if(items?.size() > 0) {
             Boolean isST = isST()
             items?.each {  isST ? deleteChildDevice(it as String, true) : deleteChildDevice(it as String) }
@@ -2337,6 +2385,8 @@ private healthCheck() {
     validateCookieAsync()
     if(getLastCookieRefreshSec() > cookieRefreshSeconds()) {
         runCookieRefresh()
+    } else if (getLastGuardSupportCheckSec() > 43200) {
+        checkGuardSupport()
     } else if(getLastServerWakeSec() > 86400) { wakeupServer() }
 
     if(!getOk2Notify()) { return }
@@ -2535,7 +2585,7 @@ String pTS(String t, String i = null, bold=true, color=null) { return isST() ? t
 String inTS(String t, String i = null, color=null, under=true) { return isST() ? t : """${color ? """<div style="color: $color;">""" : ""}${i ? """<img src="${i}" width="42"> """ : ""} ${under ? "<u>" : ""}${t?.replaceAll("\\n", " ")}${under ? "</u>" : ""}${color ? "</div>" : ""}""" }
 
 String actChildName(){ return "Echo Speaks - Actions" }
-String documentationLink() { return "https://tonesto7.github.io/echo-speaks-docs2" }
+String documentationLink() { return "https://tonesto7.github.io/echo-speaks-docs" }
 String textDonateLink() { return "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=HWBN4LB9NMHZ4" }
 def updateDocsInput() { href url: documentationLink(), style: "external", required: false, title: inTS("View Documentation", getAppImg("documentation", true)), description: "Tap to proceed", state: "complete", image: getAppImg("documentation")}
 
@@ -2830,7 +2880,7 @@ private getWebData(params, desc, text=true) {
 |    Diagnostic Data
 *******************************************/
 
-private getDiagData() {
+private getDiagDataJson() {
     try {
         updChildVers()
         def actApps = getActionApps()
@@ -2901,32 +2951,54 @@ private getDiagData() {
                 lastDataUpdDt: state?.lastDevDataUpd,
                 models: state?.deviceStyleCnts ?: [:],
                 warnings: devWarnings,
-                errors: devErrors
+                errors: devErrors,
+                speech: devSpeech
             ],
             hubPlatform: getPlatform(),
             authStatus: [
-                cookieUpdated: state?.lastCookieRefresh ?: null,
-                cookieUpdatedDur: seconds2Duration(getLastCookieRefreshSec()) ?: null,
                 cookieValidationState: (state?.authValid == true),
                 cookieValidDate: state?.lastCookieChkDt ?: null,
+                cookieValidDur: state?.lastCookieChkDt ? seconds2Duration(getLastCookieChkSec()) : null,
                 cookieValidHistory: state?.authValidHistory,
                 cookieLastRefreshDate: state?.lastCookieRefresh ?: null,
-                cookieLastRefreshDur: seconds2Duration(getLastCookieRefreshSec()),
+                cookieLastRefreshDur: state?.lastCookieRefresh ? seconds2Duration(getLastCookieRefreshSec()) : null,
+                cookieInvalidReason: (state?.authValid != true && state.authEvtClearReason) ? state?.authEvtClearReason : null,
                 cookieRefreshDays: settings?.refreshCookieDays,
-                hasCookie: (state?.cookieData && state?.cookieData?.localCookie),
-                hasCSRF: (state?.cookieData && state?.cookieData?.csrf)
+                cookieItems: [
+                    hasLocalCookie: (state?.cookieData && state?.cookieData?.localCookie),
+                    hasCSRF: (state?.cookieData && state?.cookieData?.csrf),
+                    hasDeviceId: (state?.cookieData && state?.cookieData?.deviceId),
+                    hasDeviceSerial: (state?.cookieData && state?.cookieData?.deviceSerial),
+                    hasLoginCookie: (state?.cookieData && state?.cookieData?.loginCookie),
+                    hasRefreshToken: (state?.cookieData && state?.cookieData?.refreshToken),
+                    hasFrc: (state?.cookieData && state?.cookieData?.frc),
+                    amazonPage: (state?.cookieData && state?.cookieData?.amazonPage) ? state?.cookieData?.amazonPage : null,
+                    refreshDt: (state?.cookieData && state?.cookieData?.refreshDt) ? state?.cookieData?.refreshDt : null,
+                    tokenDate: (state?.cookieData && state?.cookieData?.tokenDate) ? state?.cookieData?.tokenDate : null,
+                ],
+                cookieData: (settings?.diagShareSensitveData == true) ? state?.cookieData ?: null : "Not Shared"
             ],
             alexaGuard: [
                 supported: state?.alexaGuardSupported,
-                status: state?.alexaGuardState
+                status: state?.alexaGuardState,
+                dataSrc: state?.guardDataSrc,
+                lastSupportCheck: state?.lastGuardSupportCheck,
+                lastStateCheck: state?.lastGuardStateCheck,
+                lastStateUpd: state?.lastGuardStateUpd,
+                stRespLimit: (state?.guardDataOverMaxSize == true)
             ],
             server: [
                 version: state?.codeVersions?.server ?: null,
                 amazonDomain: settings?.amazonDomain,
                 amazonLocale: settings?.regionLocale,
                 lastServerWakeDt: state?.lastServerWakeDt,
+                lastServerWakeDur: state?.lastServerWakeDt ? seconds2Duration(getLastServerWakeSec()) : null,
                 serverPlatform: state?.onHeroku ? "Cloud" : "Local",
                 randomName: state?.generatedHerokuName
+            ],
+            versionChecks: [
+                minVersionUpdates: getMinVerUpdsRequired(),
+                updateItemsOther: codeUpdateItems()
             ]
         ]
         def json = new groovy.json.JsonOutput().toJson(output)
@@ -2935,8 +3007,100 @@ private getDiagData() {
         logError("getDiagData: Exception: ${ex.message}")
         render contentType: "application/json", data: [status: "failed", error: ex?.message], status: 500
     }
-
 }
+
+def getDiagData() {
+    def ema = new String("dG9uZXN0bzdAZ21haWwuY29t"?.decodeBase64())
+    String html = """
+        <!DOCTYPE html>
+        <html lang="en">
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta http-equiv="x-ua-compatible" content="ie=edge">
+                <title>Echo Speak Diagnostics</title>
+                <!-- <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"> -->
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.9.0/css/all.min.css">
+                <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet">
+                <link href="https://cdnjs.cloudflare.com/ajax/libs/mdbootstrap/4.8.8/css/mdb.min.css" rel="stylesheet">
+                <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+                <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.4/umd/popper.min.js"></script>
+                <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/js/bootstrap.min.js"></script>
+                <script>
+                    let cmdUrl = '${getAppEndpointUrl("diagCmds")}';
+                </script>
+            </head>
+            <body>
+                <div class="container-fluid">
+                    <div class="text-center">
+                        <h3 class="mt-4 mb-0">Echo Speaks Diagnostics</h3>
+                        <p>(v${appVersion()})</p>
+                    </div>
+                    <div class="px-0">
+                        <div class="d-flex justify-content-center">
+                            <button id="emailBtn" onclick="location.href='mailto:${ema?.toString()}?subject=Echo%20Speaks%20Diagnostics&body=${getAppEndpointUrl("diagData")}'" class="btn btn-sm btn-success px-3 my-2 mx-3" type="button"><i class="fas fa-envelope mr-1"></i>Email Link to Dev</button>
+                            <button id="jsonBtn" onclick="location.href='${getAppEndpointUrl("diagDataJson")}'" class="btn btn-sm btn-info px-3 my-2 mx-3" type="button"><i class="fas fa-code mr-1"></i>View JSON</button>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <h4 class="my-4">Remote Commands</h4>
+                    </div>
+                    <div>
+                        <div class="d-flex justify-content-center">
+                            <section class="">
+                                <button id="wakeupServer" data-cmdtype="wakeupServer" class="btn btn-sm btn-error px-3 my-2 mx-3 cmd_btn" type="button"><i class="fas fa-x mr-1"></i>Wakeup Server</button>
+                                <button id="validateAuth" data-cmdtype="validateAuth" class="btn btn-sm btn-error px-3 my-2 mx-3 cmd_btn" type="button"><i class="fas fa-x mr-1"></i>Validate Auth</button>
+                                <button id="clearLogs" data-cmdtype="clearLogs" class="btn btn-sm btn-error px-3 my-2 mx-3 cmd_btn" type="button"><i class="fas fa-x mr-1"></i>Clear Logs</button>
+                                <button id="execUpdate" data-cmdtype="execUpdate" class="btn btn-sm btn-error px-3 my-2 mx-3 cmd_btn" type="button"><i class="fas fa-x mr-1"></i>Execute Update()</button>
+                                <button id="forceDeviceSync" data-cmdtype="forceDeviceSync" class="btn btn-sm btn-error px-3 my-2 mx-3 cmd_btn" type="button"><i class="fas fa-x mr-1"></i>Device Auth Sync</button>
+                                <button id="cookieRefresh" data-cmdtype="cookieRefresh" class="btn btn-sm btn-error px-3 my-2 mx-3 cmd_btn" type="button"><i class="fas fa-x mr-1"></i>Refresh Cookie</button>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mdbootstrap/4.8.8/js/mdb.min.js"></script>
+            <script>
+                \$('.cmd_btn').click(function() { console.log('cmd_btn type: ', \$(this).attr("data-cmdtype")); execCmd(\$(this).attr("data-cmdtype")); });
+                function execCmd(cmd) { if(!cmd) return; \$.getJSON(cmdUrl.replace('diagCmds', `diagCmds/\${cmd}`), function(result){ console.log(result); }); }
+            </script>
+        </html>
+    """
+    render contentType: "text/html", data: html, status: 200
+}
+
+def execDiagCmds() {
+    String dcmd = params?.cmd
+    Boolean status = false
+    // log.debug "dcmd: ${dcmd}"
+    if(dcmd) {
+        switch(dcmd) {
+            case "clearLogs":
+                status = clearDiagLogs()
+                break
+            case "validateAuth":
+                status = validateCookie();
+                break
+            case "wakeupServer":
+                wakeupServer()
+                status = true
+                break
+            case "cookieRefresh":
+                status = runCookieRefresh()
+                break
+            case "forceDeviceSync":
+                status = refreshDevCookies()
+                break
+            case "execUpdate":
+                updated()
+                status = true
+                break
+        }
+    }
+    def json = new JsonOutput().toJson([message: (status ? "ok" : "failed"), command: dcmd, version: appVersion()])
+    render contentType: "application/json", data: json, status: 200
+}
+
 
 /******************************************
 |    Time and Date Conversion Functions
@@ -4025,17 +4189,34 @@ String getAppDebugDesc() {
 }
 
 private addToLogHistory(String logKey, msg, Integer max=10) {
+    Boolean ssOk = (stateSizePerc() > 70)
     List eData = atomicState[logKey as String] ?: []
-    eData.push([dt: getDtNow(), message: msg])
-	if(eData?.size() > max) { eData = eData?.drop( (eData?.size()-max)+1 ) }
+    if(eData?.find { it?.message == msg }) { return; }
+    eData?.push([dt: getDtNow(), message: msg])
+	if(!ssOk || eData?.size() > max) { eData = eData?.drop( (eData?.size()-max) ) }
 	atomicState[logKey as String] = eData
 }
 private logDebug(msg) { if(settings?.logDebug == true) { log.debug "EchoApp (v${appVersion()}) | ${msg}" } }
 private logInfo(msg) { if(settings?.logInfo != false) {  log.info " EchoApp (v${appVersion()}) | ${msg}" } }
 private logTrace(msg) { if(settings?.logTrace == true) { log.trace "EchoApp (v${appVersion()}) | ${msg}" } }
-private logWarn(msg, noHist=false) { if(settings?.logWarn != false) { log.warn " EchoApp (v${appVersion()}) | ${msg}"; }; if(!noHist) { addToLogHistory("warnHistory", msg, 10); } }
-private logError(msg) {if(settings?.logError != false) { log.error "EchoApp (v${appVersion()}) | ${msg}"; }; addToLogHistory("errorHistory", msg, 10); }
+private logWarn(msg, noHist=false) { if(settings?.logWarn != false) { log.warn " EchoApp (v${appVersion()}) | ${msg}"; }; if(!noHist) { addToLogHistory("warnHistory", msg, 15); } }
+private logError(msg) {if(settings?.logError != false) { log.error "EchoApp (v${appVersion()}) | ${msg}"; }; addToLogHistory("errorHistory", msg, 15); }
+
+def clearDiagLogs(type="all") {
+    // log.debug "clearDiagLogs($type)"
+    if(type=="all") {
+        clearLogHistory()
+        getActionApps()?.each { ca-> ca?.clearLogHistory() }
+        (isST() ? app?.getChildDevices(true) : getChildDevices())?.each { cd-> cd?.clearLogHistory() }
+        return true
+    }
+    return false
+}
 
 Map getLogHistory() {
     return [ warnings: atomicState?.warnHistory ?: [], errors: atomicState?.errorHistory ?: [] ]
+}
+void clearLogHistory() {
+    atomicState?.warnHistory = []
+    atomicState?.errorHistory = []
 }
