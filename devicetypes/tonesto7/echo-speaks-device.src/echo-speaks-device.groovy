@@ -13,21 +13,17 @@
  *  for the specific language governing permissions and limitations under the License.
  */
 
-import groovy.json.*
-import java.text.SimpleDateFormat
-import java.util.regex.Matcher
-import java.util.regex.Pattern
-String devVersion()  { return "3.1.0.2"}
-String devModified() { return "2019-09-24" }
+String devVersion()  { return "3.2.0.3"}
+String devModified() { return "2019-10-22" }
 Boolean isBeta()     { return false }
 Boolean isST()       { return (getPlatform() == "SmartThings") }
 Boolean isWS()       { return false }
 
-//TODO: Add a timer that runs after the last speak cmd that will clean up the queue and any stale items.
 metadata {
     definition (name: "Echo Speaks Device", namespace: "tonesto7", author: "Anthony Santilli", mnmn: "SmartThings", vid: "generic-music-player", importUrl: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/devicetypes/tonesto7/echo-speaks-device.src/echo-speaks-device.groovy") {
         //capability "Audio Mute" // Not Compatible with Hubitat
         capability "Audio Notification"
+        // capability "Audio Track Data" // To support SharpTools.io Album Art feature
         capability "Audio Volume"
         capability "Music Player"
         capability "Notification"
@@ -39,7 +35,7 @@ metadata {
         attribute "alexaMusicProviders", "JSON_OBJECT"
         attribute "alexaNotifications", "JSON_OBJECT"
         attribute "alexaPlaylists", "JSON_OBJECT"
-        attribute "alexaGuardStatus", "string"
+        // attribute "alexaGuardStatus", "string"
         attribute "alexaWakeWord", "string"
         attribute "btDeviceConnected", "string"
         attribute "btDevicesPaired", "JSON_OBJECT"
@@ -57,6 +53,7 @@ metadata {
         attribute "lastSpokenToTime", "number"
         attribute "lastVoiceActivity", "string"
         attribute "lastUpdated", "string"
+        attribute "mediaSource", "string"
         attribute "onlineStatus", "string"
         attribute "permissions", "string"
         attribute "supportedMusic", "string"
@@ -95,6 +92,7 @@ metadata {
         command "sayWelcomeHome", ["number", "number"]
         // command "playCannedRandomTts", ["string", "number", "number"]
         // command "playCannedTts", ["string", "string", "number", "number"]
+        command "playAnnouncement", ["string", "number", "number"]
         command "playAnnouncement", ["string", "string", "number", "number"]
         command "playAnnouncementAll", ["string", "string"]
         command "playCalendarToday", ["number", "number"]
@@ -169,54 +167,78 @@ metadata {
             state("paused_unknown", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/unknown.png", backgroundColor: "#cccccc")
             state("playing_unknown", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/unknown.png", backgroundColor: "#00a0dc")
             state("stopped_unknown", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/unknown.png")
-
+            // ECHO (GEN1)
             state("paused_echo_gen1", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_gen1.png", backgroundColor: "#cccccc")
             state("playing_echo_gen1", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_gen1.png", backgroundColor: "#00a0dc")
             state("stopped_echo_gen1", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_gen1.png")
-
+            // ECHO (GEN2)
             state("paused_echo_gen2", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_gen2.png", backgroundColor: "#cccccc")
             state("playing_echo_gen2", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_gen2.png", backgroundColor: "#00a0dc")
             state("stopped_echo_gen2", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_gen2.png")
-
+            // ECHO (GEN3)
+            state("paused_echo_gen3", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_gen3.png", backgroundColor: "#cccccc")
+            state("playing_echo_gen3", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_gen3.png", backgroundColor: "#00a0dc")
+            state("stopped_echo_gen3", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_gen3.png")
+            // ECHO PLUS (GEN1)
             state("paused_echo_plus_gen1", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_plus_gen1.png", backgroundColor: "#cccccc")
             state("playing_echo_plus_gen1", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_plus_gen1.png", backgroundColor: "#00a0dc")
             state("stopped_echo_plus_gen1", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_plus_gen1.png")
-
+            // ECHO PLUS (GEN2)
             state("paused_echo_plus_gen2", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_plus_gen2.png", backgroundColor: "#cccccc")
             state("playing_echo_plus_gen2", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_plus_gen2.png", backgroundColor: "#00a0dc")
             state("stopped_echo_plus_gen2", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_plus_gen2.png")
-
+            // ECHO DOT (GEN1)
             state("paused_echo_dot_gen1", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_dot_gen1.png", backgroundColor: "#cccccc")
             state("playing_echo_dot_gen1", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_dot_gen1.png", backgroundColor: "#00a0dc")
             state("stopped_echo_dot_gen1", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_dot_gen1.png")
-
+            // ECHO DOT (GEN2)
             state("paused_echo_dot_gen2", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_dot_gen2.png", backgroundColor: "#cccccc")
             state("playing_echo_dot_gen2", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_dot_gen2.png", backgroundColor: "#00a0dc")
             state("stopped_echo_dot_gen2", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_dot_gen2.png")
-
+            // ECHO DOT (GEN3)
             state("paused_echo_dot_gen3", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_dot_gen3.png", backgroundColor: "#cccccc")
             state("playing_echo_dot_gen3", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_dot_gen3.png", backgroundColor: "#00a0dc")
             state("stopped_echo_dot_gen3", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_dot_gen3.png")
-
+            // ECHO SPOT (GEN1)
             state("paused_echo_spot_gen1", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_spot_gen1.png", backgroundColor: "#cccccc")
             state("playing_echo_spot_gen1", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_spot_gen1.png", backgroundColor: "#00a0dc")
             state("stopped_echo_spot_gen1", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_spot_gen1.png")
-
+            // ECHO SHOW (GEN1)
             state("paused_echo_show_gen1", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_gen1.png", backgroundColor: "#cccccc")
             state("playing_echo_show_gen1", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_gen1.png", backgroundColor: "#00a0dc")
             state("stopped_echo_show_gen1", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_gen1.png")
-
+            // ECHO SHOW (GEN2)
             state("paused_echo_show_gen2", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_gen2.png", backgroundColor: "#cccccc")
             state("playing_echo_show_gen2", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_gen2.png", backgroundColor: "#00a0dc")
             state("stopped_echo_show_gen2", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_gen2.png")
-
+            // ECHO SHOW 5 (GEN1)
             state("paused_echo_show_5", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_5.png", backgroundColor: "#cccccc")
             state("playing_echo_show_5", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_5.png", backgroundColor: "#00a0dc")
             state("stopped_echo_show_5", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_5.png")
-
+            // ECHO SHOW 8 (GEN1)
+            state("paused_echo_show_8", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_8.png", backgroundColor: "#cccccc")
+            state("playing_echo_show_8", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_8.png", backgroundColor: "#00a0dc")
+            state("stopped_echo_show_8", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_show_8.png")
+            // ECHO TAP (GEN1)
             state("paused_echo_tap", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_tap.png", backgroundColor: "#cccccc")
             state("playing_echo_tap", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_tap.png", backgroundColor: "#00a0dc")
             state("stopped_echo_tap", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_tap.png")
+            // ECHO STUDIO (GEN1)
+            state("paused_echo_studio", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_studio.png", backgroundColor: "#cccccc")
+            state("playing_echo_studio", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_studio.png", backgroundColor: "#00a0dc")
+            state("stopped_echo_studio", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_studio.png")
+            // ECHO AUTO (GEN1)
+            state("paused_echo_auto", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_auto.png", backgroundColor: "#cccccc")
+            state("playing_echo_auto", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_auto.png", backgroundColor: "#00a0dc")
+            state("stopped_echo_auto", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_auto.png")
+            // ECHO BUDS (GEN1)
+            state("paused_echo_buds", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_buds.png", backgroundColor: "#cccccc")
+            state("playing_echo_buds", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_buds.png", backgroundColor: "#00a0dc")
+            state("stopped_echo_buds", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_buds.png")
+            // ECHO INPUT (GEN1)
+            state("paused_echo_input", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_input.png", backgroundColor: "#cccccc")
+            state("playing_echo_input", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_input.png", backgroundColor: "#00a0dc")
+            state("stopped_echo_input", label:"Stopped", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/echo_input.png")
 
             state("paused_amazon_tablet", label:"Paused", action:"music Player.play", nextState: "playing", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/amazon_tablet.png", backgroundColor: "#cccccc")
             state("playing_amazon_tablet", label:"Playing", action:"music Player.pause", nextState: "paused", icon: "https://raw.githubusercontent.com/tonesto7/echo-speaks/master/resources/icons/amazon_tablet.png", backgroundColor: "#00a0dc")
@@ -312,10 +334,13 @@ metadata {
         valueTile("onlineStatus", "device.onlineStatus", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("onlineStatus", label:'Online Status:\n${currentValue}')
         }
-        valueTile("currentStation", "device.currentStation", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
+        valueTile("mediaSource", "device.mediaSource", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+            state("default", label:'Source:\n${currentValue}')
+        }
+        valueTile("currentStation", "device.currentStation", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("default", label:'Station:\n${currentValue}')
         }
-        valueTile("currentAlbum", "device.currentAlbum", height: 1, width: 3, inactiveLabel: false, decoration: "flat") {
+        valueTile("currentAlbum", "device.currentAlbum", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
             state("default", label:'Album:\n${currentValue}')
         }
         valueTile("lastSpeakCmd", "device.lastSpeakCmd", height: 2, width: 3, inactiveLabel: false, decoration: "flat") {
@@ -430,7 +455,7 @@ metadata {
             "playWeather", "playSingASong", "playFlashBrief", "playTraffic", "playTellStory", "playFunFact",
             "playJoke", "sayWelcomeHome", "sayGoodMorning", "sayGoodNight", "sayCompliment", "resetQueue",
             "playCalendarToday", "playCalendarTomorrow", "playCalendarNext", "speechTest", "sendTestAnnouncement", "sendTestAnnouncementAll",
-            "currentAlbum", "currentStation",
+            "mediaSource", "currentAlbum", "currentStation",
             "alarmVolume", "btDeviceConnected", "btDevicesPaired", "deviceStyle", "onlineStatus", "alexaWakeWord", "supportedMusic", "lastSpeakCmd", "lastCmdSentDt", "lastVoiceActivity",
             "permissions"
         ])
@@ -465,6 +490,7 @@ def installed() {
     sendEvent(name: "followUpMode", value: false)
     sendEvent(name: "alarmVolume", value: 0)
     sendEvent(name: "alexaWakeWord", value: "ALEXA")
+    sendEvent(name: "mediaSource", value: "")
     state?.doNotDisturb = false
     initialize()
     runIn(20, "postInstall")
@@ -472,13 +498,14 @@ def installed() {
 
 def updated() {
     logTrace("${device?.displayName} Executing Updated()")
+    state?.fullRefreshOk = true
     initialize()
 }
 
 def initialize() {
     logInfo("${device?.displayName} Executing initialize()")
     sendEvent(name: "DeviceWatch-DeviceStatus", value: "online")
-    sendEvent(name: "DeviceWatch-Enroll", value: new JsonOutput().toJson([protocol: "cloud", scheme:"untracked"]), displayed: false)
+    sendEvent(name: "DeviceWatch-Enroll", value: new groovy.json.JsonOutput().toJson([protocol: "cloud", scheme:"untracked"]), displayed: false)
     resetQueue()
     stateCleanup()
     if(checkMinVersion()) { logError("CODE UPDATE required to RESUME operation.  No Device Events will updated."); return; }
@@ -493,17 +520,9 @@ def postInstall() {
     if(device?.currentState('alarmVolume') == 0) { setAlarmVolume(30) }
 }
 
-public triggerInitialize() {
-    runIn(3, "initialize")
-}
-
-String getDeviceType() {
-    return state?.deviceType ?: null
-}
-
-String getDeviceSerial() {
-    return state?.serialNumber ?: null
-}
+public triggerInitialize() { runIn(3, "initialize") }
+String getEchoDeviceType() { return state?.deviceType ?: null }
+String getEchoSerial() { return state?.serialNumber ?: null }
 
 String getHealthStatus(lower=false) {
 	String res = device?.getStatus()
@@ -559,7 +578,7 @@ Boolean isCommandTypeAllowed(String type, noLogs=false) {
     if(!state?.deviceOwnerCustomerId) { if(!noLogs) { logWarn("OwnerCustomerId State Value Missing: ${state?.deviceOwnerCustomerId}", true) }; return false; }
     if(state?.isSupportedDevice == false) { logWarn("You are using an Unsupported/Unknown Device all restrictions have been removed for testing! If commands function please report device info to developer", true); return true; }
     if(!type || state?.permissions == null) { if(!noLogs) { logWarn("Permissions State Object Missing: ${state?.permissions}", true) }; return false }
-    if(state?.doNotDisturb == true && (!(type in ["volumeControl", "alarms", "reminders", "doNotDisturb", "wakeWord", "bluetoothControl", "mediaPlayer"]))) { if(!noLogs) { logWarn("All Voice Output Blocked... Do Not Disturb is ON", true) }; return false }
+    if(device?.currentValue("doNotDisturb") == "true" && (!(type in ["volumeControl", "alarms", "reminders", "doNotDisturb", "wakeWord", "bluetoothControl", "mediaPlayer"]))) { if(!noLogs) { logWarn("All Voice Output Blocked... Do Not Disturb is ON", true) }; return false }
     if(state?.permissions?.containsKey(type) && state?.permissions[type] == true) { return true }
     else {
         String warnMsg = null
@@ -645,17 +664,15 @@ void updateDeviceStatus(Map devData) {
         //         log.debug("$k: $v")
         //     }
         // }
-        // devData?.playerState?.each { k,v ->
-        //     if(!(k in ["mainArt", "mediaId", "miniArt", "hint", "template", "upNextItems", "queueId", "miniInfoText", "provider"])) {
-        //         logDebug("$k: $v")
-        //     }
-        // }
         state?.isSupportedDevice = (devData?.unsupported != true)
+        state?.isEchoDevice = (devData?.isEchoDevice == true)
         state?.serialNumber = devData?.serialNumber
         state?.deviceType = devData?.deviceType
         state?.deviceOwnerCustomerId = devData?.deviceOwnerCustomerId
         state?.deviceAccountId = devData?.deviceAccountId
         state?.softwareVersion = devData?.softwareVersion
+        // state?.mainAccountCommsId = devData?.mainAccountCommsId ?: null
+        // log.debug "mainAccountCommsId: ${state?.mainAccountCommsId}"
         state?.cookie = devData?.cookie
         state?.authValid = (devData?.authValid == true)
         state?.amazonDomain = devData?.amazonDomain
@@ -664,7 +681,8 @@ void updateDeviceStatus(Map devData) {
         devData?.permissionMap?.each {k,v -> permissions[k] = v }
         state?.permissions = permissions
         state?.hasClusterMembers = devData?.hasClusterMembers
-        //log.trace "hasClusterMembers: ${ state?.hasClusterMembers}"
+        state?.isWhaDevice = (devData?.permissionMap?.isMultiroomDevice == true)
+        // log.trace "hasClusterMembers: ${ state?.hasClusterMembers}"
         // log.trace "permissions: ${state?.permissions}"
         List permissionList = permissions?.findAll { it?.value == true }?.collect { it?.key }
         if(isStateChange(device, "permissions", permissionList?.toString())) {
@@ -715,6 +733,51 @@ void updateDeviceStatus(Map devData) {
     schedDataRefresh()
 }
 
+public updSocketStatus(active) {
+    if(active != true) { schedDataRefresh(true) }
+    state?.websocketActive = active
+}
+
+void websocketUpdEvt(triggers) {
+    logDebug("websocketEvt: $triggers")
+    if(state?.isWhaDevice) { return }
+    if(triggers?.size()) {
+        triggers?.each { k->
+            switch(k) {
+                case "all":
+                    state?.fullRefreshOk = true
+                    runIn(2, "refreshData")
+                    break
+                case "media":
+                    runIn(2, "getPlaybackState")
+                    break
+                case "queue":
+                    runIn(4, "getPlaylists")
+                case "notif":
+                    runIn(2, "getNotifications")
+                    break
+                case "bluetooth":
+                    runIn(2, "getBluetoothDevices")
+                    break
+                case "notification":
+                    runIn(2, "getNotifications")
+                    break
+                case "online":
+                    setOnlineStatus(true)
+                    break
+                case "offline":
+                    setOnlineStatus(false)
+                    break
+                case "activity":
+                    runIn(2, "getDeviceActivity")
+                    break
+
+            }
+            //TODO: BUILD A DATA REFRESH QUEUE System
+        }
+    }
+}
+
 void refresh() {
     logTrace("refresh()")
     parent?.childInitiatedRefresh()
@@ -734,6 +797,9 @@ public schedDataRefresh(frc) {
 
 private refreshData(full=false) {
     // logTrace("trace", "refreshData()...")
+    Boolean wsActive = (state?.websocketActive == true)
+    Boolean isWHA = (state?.isWhaDevice == true)
+    Boolean isEchoDev = (state?.isEchoDevice == true)
     if(device?.currentValue("onlineStatus") != "online") {
         logTrace("Skipping Device Data Refresh... Device is OFFLINE... (Offline Status Updated Every 10 Minutes)")
         return
@@ -741,21 +807,23 @@ private refreshData(full=false) {
     if(!isAuthOk()) {return}
     if(checkMinVersion()) { logError("CODE UPDATE required to RESUME operation.  No Device Events will updated."); return; }
     // logTrace("permissions: ${state?.permissions}")
-    if(state?.permissions?.mediaPlayer == true) {
+    if(state?.permissions?.mediaPlayer == true && (full || state?.fullRefreshOk || !wsActive)) {
         getPlaybackState()
-        getPlaylists()
+        if(!isWHA) { getPlaylists() }
     }
-    if(full || state?.fullRefreshOk) {
-        state?.fullRefreshOk = false
-        getWifiDetails()
-        getDeviceSettings()
-    }
-    if(state?.permissions?.doNotDisturb == true) { getDoNotDisturb() }
-    getDeviceActivity()
-    runIn(3, "refreshStage2")
+    if(!isWHA) {
+        if (full || state?.fullRefreshOk) {
+            if(isEchoDev) { getWifiDetails() }
+            getDeviceSettings()
+        }
+        if(state?.permissions?.doNotDisturb == true) { getDoNotDisturb() }
+        getDeviceActivity()
+        runIn(3, "refreshStage2")
+    } else { state?.fullRefreshOk = false }
 }
 
 private refreshStage2() {
+    Boolean wsActive = (state?.websocketActive == true)
     if(state?.permissions?.wakeWord) {
         getWakeWord()
         getAvailableWakeWords()
@@ -764,12 +832,12 @@ private refreshStage2() {
         if(state?.permissions?.alarms == true) { getAlarmVolume() }
         getNotifications()
     }
-    // log.debug "bluetoothControl: ${state?.permissions?.bluetoothControl}"
 
-    if(state?.permissions?.bluetoothControl) {
+    if(state?.permissions?.bluetoothControl && !wsActive) {
         getBluetoothDevices()
     }
-    updGuardStatus()
+    state?.fullRefreshOk = false
+    // updGuardStatus()
 }
 
 public setOnlineStatus(Boolean isOnline) {
@@ -787,15 +855,15 @@ private getPlaybackState(isGroupResponse=false) {
     Map params = [
         uri: getAmazonUrl(),
         path: "/api/np/player",
-        query: [ deviceSerialNumber: state?.serialNumber, deviceType: state?.deviceType, screenWidth: 2560, _: new Date()?.getTime() ],
-        headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
+        query: [ deviceSerialNumber: state?.serialNumber, deviceType: state?.deviceType, screenWidth: 2560, _: now() ],
+        headers: [ Cookie: getCookieVal(), csrf: getCsrfVal() ],
         contentType: "application/json"
     ]
     Map playerInfo = [:]
     try {
         httpGet(params) { response->
             Map sData = response?.data ?: [:]
-            playerInfo = sData?.playerInfo ?: null
+            playerInfo = sData?.playerInfo ?: [:]
         }
     } catch (ex) {
         respExceptionHandler(ex, "getPlaybackState", false, true)
@@ -806,6 +874,7 @@ private getPlaybackState(isGroupResponse=false) {
 def playbackStateHandler(playerInfo, isGroupResponse=false) {
     // log.debug "playerInfo: ${playerInfo}"
     Boolean isPlayStateChange = false
+    Boolean isMediaInfoChange = false
     if (state?.isGroupPlaying && !isGroupResponse) {
         logDebug("ignoring getPlaybackState because group is playing here")
         return
@@ -826,26 +895,48 @@ def playbackStateHandler(playerInfo, isGroupResponse=false) {
     //Track Title
     String title = playerInfo?.infoText?.title ?: ""
     if(isStateChange(device, "trackDescription", title?.toString())) {
+        isMediaInfoChange = true
         sendEvent(name: "trackDescription", value: title?.toString(), descriptionText: "Track Description is ${title}", display: true, displayed: true)
     }
     //Track Sub-Text2
     String subText1 = playerInfo?.infoText?.subText1 ?: "Idle"
     if(isStateChange(device, "currentAlbum", subText1?.toString())) {
+        isMediaInfoChange = true
         sendEvent(name: "currentAlbum", value: subText1?.toString(), descriptionText: "Album is ${subText1}", display: true, displayed: true)
     }
     //Track Sub-Text2
     String subText2 = playerInfo?.infoText?.subText2 ?: "Idle"
     if(isStateChange(device, "currentStation", subText2?.toString())) {
+        isMediaInfoChange = true
         sendEvent(name: "currentStation", value: subText2?.toString(), descriptionText: "Station is ${subText2}", display: true, displayed: true)
     }
 
-    //Track Art Imager
-    String trackImg = playerInfo?.mainArt?.url ?: ""
+    //Track Art Image
+    String trackImg = (playerInfo && playerInfo?.mainArt && playerInfo?.mainArt?.url) ? playerInfo?.mainArt?.url : ""
     if(isStateChange(device, "trackImage", trackImg?.toString())) {
+        isMediaInfoChange = true
         sendEvent(name: "trackImage", value: trackImg?.toString(), descriptionText: "Track Image is ${trackImg}", display: false, displayed: false)
-    }
-    if(isStateChange(device, "trackImageHtml", """<img src="${trackImg?.toString()}"/>""")) {
         sendEvent(name: "trackImageHtml", value: """<img src="${trackImg?.toString()}"/>""", display: false, displayed: false)
+    }
+
+    //Media Source Provider
+    String mediaSource = playerInfo?.provider?.providerName ?: ""
+    if(isStateChange(device, "mediaSource", mediaSource?.toString())) {
+    	isMediaInfoChange = true
+        sendEvent(name: "mediaSource", value: mediaSource?.toString(), descriptionText: "Media Source is ${mediaSource}", display: true, displayed: true)
+    }
+
+    //Update Audio Track Data
+    if (isMediaInfoChange){
+    	Map trackData = [:]
+        if(playerInfo?.infoText?.title) { trackData?.title = playerInfo?.infoText?.title }
+        if(playerInfo?.infoText?.subText1) { trackData?.artist = playerInfo?.infoText?.subText1 }
+        //To avoid media source provider being used as album (ex: Apple Music), only inject `album` if subText2 and providerName are different
+        if(playerInfo?.infoText?.subText2 && playerInfo?.provider?.providerName!=playerInfo?.infoText?.subText2) { trackData?.album = playerInfo?.infoText?.subText2 }
+        if(playerInfo?.mainArt?.url) { trackData?.albumArtUrl = playerInfo?.mainArt?.url }
+        if(playerInfo?.provider?.providerName) { trackData?.mediaSource = playerInfo?.provider?.providerName }
+        //log.debug(trackData)
+        sendEvent(name: "audioTrackData", value: new groovy.json.JsonOutput().toJson(trackData), display: false, displayed: false)
     }
 
     // Group response data never has valida data for volume
@@ -870,7 +961,7 @@ def playbackStateHandler(playerInfo, isGroupResponse=false) {
     }
     // Update cluster (unless we remain paused)
     if (state?.hasClusterMembers && (playerInfo?.state == 'PLAYING' || isPlayStateChange)) {
-        parent?.sendPlaybackStateToClusterMembers(state?.serialNumber, response, data)
+        parent?.sendPlaybackStateToClusterMembers(state?.serialNumber, playerInfo)
     }
 }
 
@@ -1017,6 +1108,7 @@ def getBluetoothDevices() {
 }
 
 def updGuardStatus(val=null) {
+    //TODO: Update this because it's not working
     String gState = val ?: (state?.permissions?.guardSupported ? (parent?.getAlexaGuardStatus() ?: "Unknown") : "Not Supported")
     if(isStateChange(device, "alexaGuardStatus", gState?.toString())) {
         sendEvent(name: "alexaGuardStatus", value: gState, display: false, displayed: false)
@@ -1068,8 +1160,8 @@ private getNotifications() {
     Map params = [
         uri: getAmazonUrl(),
         path: "/api/notifications",
-        query: [ cached: true ],
-        headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
+        query: [cached: true],
+        headers: [Cookie: getCookieVal(), csrf: getCsrfVal()],
         contentType: "application/json"
     ]
     try {
@@ -1099,7 +1191,7 @@ private getDeviceActivity() {
         uri: getAmazonUrl(),
         path: "/api/activities",
         query: [ startTime:"", size:"50", offset:"-1" ],
-        headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
+        headers: [Cookie: getCookieVal(), csrf: getCsrfVal()],
         contentType: "application/json"
     ]
     try {
@@ -1115,7 +1207,7 @@ private getDeviceActivity() {
                     it?.utteranceId?.startsWith(it?.sourceDeviceIds?.deviceType)
                 }
                 if (lastCommand) {
-                    def lastDescription = new JsonSlurper().parseText(lastCommand?.description)
+                    def lastDescription = new groovy.json.JsonSlurper().parseText(lastCommand?.description)
                     def spokenText = lastDescription?.summary
                     def lastDevice = lastCommand?.sourceDeviceIds?.get(0)
                     if(lastDevice?.serialNumber == state?.serialNumber) {
@@ -1146,7 +1238,7 @@ String getCsrfVal() { return (state?.cookie && state?.cookie?.csrf) ? state?.coo
 *******************************************************************/
 
 private sendAmazonBasicCommand(String cmdType) {
-    sendAmazonCommand("post", [
+    sendAmazonCommand("POST", [
         uri: getAmazonUrl(),
         path: "/api/np/command",
         headers: [ Cookie: getCookieVal(), csrf: getCsrfVal()],
@@ -1171,21 +1263,19 @@ private sendAmazonCommand(String method, Map params, Map otherData=null) {
         def rData = null
         def rStatus = null
         switch(method) {
-            case "post":
             case "POST":
                 httpPostJson(params) { response->
                     rData = response?.data ?: null
                     rStatus = response?.status
                 }
                 break
-            case "put":
             case "PUT":
+                if(params?.body) { params?.body = new groovy.json.JsonOutput().toJson(params?.body) }
                 httpPutJson(params) { response->
                     rData = response?.data ?: null
                     rStatus = response?.status
                 }
                 break
-            case "delete":
             case "DELETE":
                 httpDelete(params) { response->
                     rData = response?.data ?: null
@@ -1196,7 +1286,7 @@ private sendAmazonCommand(String method, Map params, Map otherData=null) {
         if (otherData?.cmdDesc?.startsWith("connectBluetooth") || otherData?.cmdDesc?.startsWith("disconnectBluetooth") || otherData?.cmdDesc?.startsWith("removeBluetooth")) {
             triggerDataRrsh()
         } else if(otherData?.cmdDesc?.startsWith("renameDevice")) { triggerDataRrsh(true) }
-        logDebug("sendAmazonCommand | Status: (${response?.status})${rData != null ? " | Response: ${rData}" : ""} | ${otherData?.cmdDesc} was Successfully Sent!!!")
+        logDebug("sendAmazonCommand | Status: (${rStatus})${rData != null ? " | Response: ${rData}" : ""} | ${otherData?.cmdDesc} was Successfully Sent!!!")
     } catch (ex) {
         respExceptionHandler(ex, "${otherData?.cmdDesc}", true)
     }
@@ -1210,7 +1300,7 @@ private sendSequenceCommand(type, command, value) {
         path: "/api/behaviors/preview",
         headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
         contentType: "application/json",
-        body: new JsonOutput().toJson(seqObj)
+        body: new groovy.json.JsonOutput().toJson(seqObj)
     ], [cmdDesc: "SequenceCommand (${type})"])
 }
 
@@ -1220,7 +1310,7 @@ private sendMultiSequenceCommand(commands, String srcDesc, Boolean parallel=fals
     commands?.each { cmdItem->
         if(cmdItem?.command instanceof Map) {
             nodeList?.push(cmdItem?.command)
-        } else { nodeList?.push(createSequenceNode(cmdItem?.command, cmdItem?.value)) }
+        } else { nodeList?.push(createSequenceNode(cmdItem?.command, cmdItem?.value, cmdItem?.devType ?: null, cmdItem?.devSerial ?: null)) }
     }
     Map seqJson = [ "sequence": [ "@type": "com.amazon.alexa.behaviors.model.Sequence", "startNode": [ "@type": "com.amazon.alexa.behaviors.model.${seqType}", "name": null, "nodesToExecute": nodeList ] ] ]
     sendSequenceCommand("${srcDesc} | MultiSequence: ${parallel ? "Parallel" : "Sequential"}", seqJson, null)
@@ -1240,7 +1330,13 @@ def respExceptionHandler(ex, String mName, clearOn401=false, ignNullMsg=false) {
                     if(respData && respData?.message == null && ignNullMsg) {
                         // Ignoring Null message
                     } else {
-                        logError("${mName} | Improperly formatted request sent to Amazon | Msg: ${errMsg}")
+                        if (respData && respData?.message?.startsWith("Music metadata")) {
+                            // Ignoring metadata error message
+                        } else if(respData && respData?.message?.startsWith("Unknown device type in request")) {
+                            // Ignoring Unknown device type in request
+                        } else if(respData && respData?.message?.startsWith("device not connected")) {
+                            // Ignoring device not connect error
+                        } else { logError("${mName} Code: ($sCode) | Message: ${errMsg} | Data: ${respData}") }
                     }
                     break
                 case "Rate Exceeded":
@@ -1256,6 +1352,8 @@ def respExceptionHandler(ex, String mName, clearOn401=false, ignNullMsg=false) {
             }
         } else if(sCode == 429) {
             logWarn("${mName} | Too Many Requests Made to Amazon | Msg: ${errMsg}")
+        } else if(sCode == 200) {
+            if(errMsg != "OK") { logError("${mName} Response Exception | Status: (${sCode}) | Msg: ${errMsg}") }
         } else {
             logError("${mName} Response Exception | Status: (${sCode}) | Msg: ${errMsg}")
         }
@@ -1426,7 +1524,7 @@ def setLevel(level) {
 def setAlarmVolume(vol) {
     logTrace("setAlarmVolume($vol) command received...")
     if(isCommandTypeAllowed("alarms") && vol>=0 && vol<=100) {
-        sendAmazonCommand("put", [
+        sendAmazonCommand("PUT", [
             uri: getAmazonUrl(),
             path: "/api/device-notification-state/${state?.deviceType}/${state?.softwareVersion}/${state?.serialNumber}",
             headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
@@ -1488,7 +1586,7 @@ def followUpModeOn() {
 def setDoNotDisturb(Boolean val) {
     logTrace("setDoNotDisturb($val) command received...")
     if(isCommandTypeAllowed("doNotDisturb")) {
-        sendAmazonCommand("put", [
+        sendAmazonCommand("PUT", [
             uri: getAmazonUrl(),
             path: "/api/dnd/status",
             headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
@@ -1500,6 +1598,8 @@ def setDoNotDisturb(Boolean val) {
             ]
         ], [cmdDesc: "SetDoNotDisturb${val ? "On" : "Off"}"])
         incrementCntByKey("use_cnt_dndCmd${val ? "On" : "Off"}")
+        sendEvent(name: "doNotDisturb", value: (val == true)?.toString(), descriptionText: "Do Not Disturb Enabled ${(val == true)}", display: true, displayed: true)
+        parent?.getDoNotDisturb()
     }
 }
 
@@ -1508,10 +1608,10 @@ def setFollowUpMode(Boolean val) {
     if(state?.devicePreferences == null || !state?.devicePreferences?.size()) { return }
     if(!state?.deviceAccountId) { logError("renameDevice Failed because deviceAccountId is not found..."); return; }
     if(isCommandTypeAllowed("followUpMode")) {
-        sendAmazonCommand("put", [
+        sendAmazonCommand("PUT", [
             uri: getAmazonUrl(),
             path: "/api/device-preferences/${state?.serialNumber}",
-            headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
+            headers: [ Cookie: getCookieVal(), csrf: getCsrfVal()],
             contentType: "application/json",
             body: [
                 deviceSerialNumber: state?.serialNumber,
@@ -1635,7 +1735,7 @@ def executeRoutineId(String rId) {
     logTrace("executeRoutineId($rId) command received...")
     if(!rId) { logWarn("No Routine ID sent with executeRoutineId($rId) command", true) }
     if(parent?.executeRoutineById(rId as String)) {
-        logDebug("Executed Alexa Routine | Process Time: (${(now()-execDt)}ms) | RoutineId: ${rId}", true)
+        logDebug("Executed Alexa Routine | Process Time: (${(now()-execDt)}ms) | RoutineId: ${rId}")
         incrementCntByKey("use_cnt_executeRoutine")
     }
 }
@@ -1741,7 +1841,18 @@ def playCannedRandomTts(String type, volume=null, restoreVolume=null) {
     incrementCntByKey("use_cnt_playCannedRandomTTS")
 }
 
-def playAnnouncement(String msg, String title=null, volume=null, restoreVolume=null) {
+def playAnnouncement(String msg, volume=null, restoreVolume=null) {
+    if(isCommandTypeAllowed("announce")) {
+        if(volume != null) {
+            List seqs = [[command: "volume", value: volume], [command: "announcement", value: msg]]
+            if(restoreVolume != null) { seqs?.push([command: "volume", value: restoreVolume]) }
+            sendMultiSequenceCommand(seqs, "playAnnouncement")
+        } else { doSequenceCmd("playAnnouncement", "announcement", msg) }
+        incrementCntByKey("use_cnt_announcement")
+    }
+}
+
+def playAnnouncement(String msg, String title, volume=null, restoreVolume=null) {
     if(isCommandTypeAllowed("announce")) {
         msg = "${title ? "${title}::" : ""}${msg}"
         if(volume != null) {
@@ -1754,21 +1865,24 @@ def playAnnouncement(String msg, String title=null, volume=null, restoreVolume=n
 }
 
 def sendAnnouncementToDevices(String msg, String title=null, devObj, volume=null, restoreVolume=null) {
+    // log.debug "sendAnnouncementToDevices(msg: $msg, title: $title, devObj: devObj, volume: $volume, restoreVolume: $restoreVolume)"
     if(isCommandTypeAllowed("announce") && devObj) {
-        msg = "${title ? "${title}" : "Echo Speaks"}::${msg}::${devObj?.toString()}"
+        def devJson = new groovy.json.JsonOutput().toJson(devObj)
+        msg = "${title ?: "Echo Speaks"}::${msg}::${devJson?.toString()}"
         // log.debug "sendAnnouncementToDevices | msg: ${msg}"
-        if(volume != null) {
-            List seqs = [[command: "volume", value: volume], [command: "announcement_devices", value: msg]]
-            if(restoreVolume != null) { seqs?.push([command: "volume", value: restoreVolume]) }
-            sendMultiSequenceCommand(seqs, "sendAnnouncementToDevices")
+        if(volume || restoreVolume) {
+            List mainSeq = []
+            if(volume) { devObj?.each { dev-> mainSeq?.push([command: "volume", value: volume, devType: dev?.deviceTypeId, devSerial: dev?.deviceSerialNumber]) } }
+            mainSeq?.push([command: "announcement_devices", value: msg])
+            if(restoreVolume) { devObj?.each { dev-> mainSeq?.push([command: "volume", value: restoreVolume, devType: dev?.deviceTypeId, devSerial: dev?.deviceSerialNumber]) } }
+            sendMultiSequenceCommand(mainSeq, "sendAnnouncementToDevices")
         } else { doSequenceCmd("sendAnnouncementToDevices", "announcement_devices", msg) }
         incrementCntByKey("use_cnt_announcementDevices")
     }
 }
 
 def playAnnouncementAll(String msg, String title=null) {
-    // if(isCommandTypeAllowed("announce")) {
-        msg = "${title ? "${title}::" : ""}${msg}"
+    // if(isCommandTypeAllowed("announce")) {bvxdsa
         doSequenceCmd("AnnouncementAll", "announcementall", msg)
         incrementCntByKey("use_cnt_announcementAll")
     // }
@@ -1895,13 +2009,13 @@ private Map validateMusicSearch(searchPhrase, providerId, sleepSeconds=null) {
         ]
     ]
     if(sleepSeconds) { validObj?.operationPayload?.waitTimeInSeconds = sleepSeconds }
-    validObj?.operationPayload = new JsonOutput().toJson(validObj?.operationPayload)
+    validObj?.operationPayload = new groovy.json.JsonOutput().toJson(validObj?.operationPayload)
     Map params = [
         uri: getAmazonUrl(),
         path: "/api/behaviors/operation/validate",
         headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
         contentType: "application/json",
-        body: new JsonOutput().toJson(validObj)
+        body: new groovy.json.JsonOutput().toJson(validObj)
     ]
     Map result = null
     try {
@@ -1948,9 +2062,9 @@ def setWakeWord(String newWord) {
     logTrace("setWakeWord($newWord) command received...")
     String oldWord = device?.currentValue('alexaWakeWord')
     def wwList = device?.currentValue('wakeWords') ?: []
-    logDebug("newWord: $newWord | oldWord: $oldWord | wwList: $wwList (${wwList?.contains(newWord.toString()?.toUpperCase())})", true)
+    logDebug("newWord: $newWord | oldWord: $oldWord | wwList: $wwList (${wwList?.contains(newWord.toString()?.toUpperCase())})")
     if(oldWord && newWord && wwList && wwList?.contains(newWord.toString()?.toUpperCase())) {
-        sendAmazonCommand("put", [
+        sendAmazonCommand("PUT", [
             uri: getAmazonUrl(),
             path: "/api/wake-word/${state?.serialNumber}",
             headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
@@ -1990,8 +2104,8 @@ def createReminder(String remLbl, String remDate, String remTime) {
             createNotification("Reminder", [
                 cmdType: "CreateReminder",
                 label: remLbl?.toString(),
-                date: remDate,
-                time: remTime,
+                date: remDate?.toString(),
+                time: remTime?.toString(),
                 type: "Reminder"
             ])
             incrementCntByKey("use_cnt_createReminder")
@@ -2003,7 +2117,7 @@ def removeNotification(String id) {
     logTrace("removeNotification($id) command received...")
     if(isCommandTypeAllowed("alarms") || isCommandTypeAllowed("reminders", true)) {
         if(id) {
-            sendAmazonCommand("delete", [
+            sendAmazonCommand("DELETE", [
                 uri: getAmazonUrl(),
                 path: "/api/notifications/${id}",
                 headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
@@ -2030,6 +2144,7 @@ private createNotification(type, options) {
             type: type,
             status: "ON",
             alarmTime: alarmTime,
+            createdDate: createdDate,
             originalTime: type != "Timer" ? "${options?.time}:00.000" : null,
             originalDate: type != "Timer" ? options?.date : null,
             timeZoneId: null,
@@ -2041,23 +2156,23 @@ private createNotification(type, options) {
             recurringPattern: type != "Timer" ? '' : null,
             alarmLabel: type == "Alarm" ? options?.label : null,
             reminderLabel: type == "Reminder" ? options?.label : null,
+            reminderSubLabel: "Echo Speaks",
             timerLabel: type == "Timer" ? options?.label : null,
             skillInfo: null,
             isSaveInFlight: type != "Timer" ? true : null,
             triggerTime: 0,
             id: "create${type}",
             isRecurring: false,
-            createdDate: createdDate,
             remainingDuration: type != "Timer" ? 0 : options?.timerDuration
         ]
     ]
-    sendAmazonCommand("put", params, [cmdDesc: "Create${type}"])
+    sendAmazonCommand("PUT", params, [cmdDesc: "Create${type}"])
 }
 
 def renameDevice(newName) {
     logTrace("renameDevice($newName) command received...")
     if(!state?.deviceAccountId) { logError("renameDevice Failed because deviceAccountId is not found..."); return; }
-    sendAmazonCommand("put", [
+    sendAmazonCommand("PUT", [
         uri: getAmazonUrl(),
         path: "/api/devices-v2/device/${state?.serialNumber}",
         headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
@@ -2077,7 +2192,7 @@ def connectBluetooth(String btNameOrAddr) {
     if(isCommandTypeAllowed("bluetoothControl")) {
         String curBtAddr = getBtAddrByAddrOrName(btNameOrAddr as String)
         if(curBtAddr) {
-            sendAmazonCommand("post", [
+            sendAmazonCommand("POST", [
                 uri: getAmazonUrl(),
                 path: "/api/bluetooth/pair-sink/${state?.deviceType}/${state?.serialNumber}",
                 headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
@@ -2095,7 +2210,7 @@ def disconnectBluetooth() {
     if(isCommandTypeAllowed("bluetoothControl")) {
         String curBtAddr = getBtAddrByAddrOrName(device?.currentValue("btDeviceConnected") as String)
         if(curBtAddr) {
-            sendAmazonCommand("post", [
+            sendAmazonCommand("POST", [
                 uri: getAmazonUrl(),
                 path: "/api/bluetooth/disconnect-sink/${state?.deviceType}/${state?.serialNumber}",
                 headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
@@ -2112,7 +2227,7 @@ def removeBluetooth(String btNameOrAddr) {
     if(isCommandTypeAllowed("bluetoothControl")) {
         String curBtAddr = getBtAddrByAddrOrName(btNameOrAddr)
         if(curBtAddr) {
-            sendAmazonCommand("post", [
+            sendAmazonCommand("POST", [
                 uri: getAmazonUrl(),
                 path: "/api/bluetooth/unpair-sink/${state?.deviceType}/${state?.serialNumber}",
                 headers: [ Cookie: getCookieVal(), csrf: getCsrfVal(), Connection: "keep-alive", DNT: "1" ],
@@ -2635,7 +2750,7 @@ private speechCmd(headers=[:], isQueueCmd=false) {
             if(headerMap?.newVolume) { seqCmds?.push([command: "volume", value: headerMap?.newVolume]) }
             seqCmds = seqCmds + msgSeqBuilder(headerMap?.message)
             if(headerMap?.oldVolume) { seqCmds?.push([command: "volume", value: headerMap?.oldVolume]) }
-            bodyObj = new JsonOutput().toJson(multiSequenceBuilder(seqCmds))
+            bodyObj = new groovy.json.JsonOutput().toJson(multiSequenceBuilder(seqCmds))
 
             Map params = [
                 uri: getAmazonUrl(),
@@ -2668,6 +2783,8 @@ private speechCmd(headers=[:], isQueueCmd=false) {
 
 private postCmdProcess(resp, statusCode, data) {
     if(data && data?.deviceId && (data?.deviceId == device?.getDeviceNetworkId())) {
+        String respMsg = resp?.message ?: null
+        String respMsgLow = resp?.message ? resp?.message?.toString()?.toLowerCase() : null
         if(statusCode == 200) {
             def execTime = data?.cmdDt ? (now()-data?.cmdDt) : 0
             if(data?.queueKey) {
@@ -2699,16 +2816,24 @@ private postCmdProcess(resp, statusCode, data) {
                 logSpeech(data?.message, statusCode, null)
             }
             return
-        } else if(statusCode.toInteger() == 400 && resp?.message && resp?.message?.toString()?.toLowerCase() == "rate exceeded") {
-            def random = new Random()
-            Integer rDelay = 2//random?.nextInt(5)
-            logWarn("You've been Rate-Limited by Amazon for sending Consectutive Commands to 5+ Device... | Device will retry again in ${rDelay} seconds", true)
-            schedQueueCheck(rDelay, true, [rateLimited: true, delay: data?.msgDelay], "postCmdProcess(Rate-Limited)")
-            logSpeech(data?.message, statusCode, resp?.message)
+        } else if((statusCode?.toInteger() in [400, 429]) && respMsgLow && (respMsgLow in ["rate exceeded", "too many requests"])) {
+            switch(respMsgLow) {
+                case "rate exceeded":
+                    Integer rDelay = 3
+                    logWarn("You've been rate-limited by Amazon for sending too many consectutive commands to your devices... | Device will retry again in ${rDelay} seconds", true)
+                    schedQueueCheck(rDelay, true, [rateLimited: true, delay: data?.msgDelay], "postCmdProcess(Rate-Limited)")
+                    break
+                case "too many requests":
+                    Integer rDelay = 5
+                    logWarn("You've sent too many consectutive commands to your devices... | Device will retry again in ${rDelay} seconds", true)
+                    schedQueueCheck(rDelay, true, [rateLimited: false, delay: data?.msgDelay], "postCmdProcess(Too-Many-Requests)")
+                    break
+            }
+            logSpeech(data?.message, statusCode, respMsg)
             return
         } else {
-            logError("postCmdProcess Error | status: ${statusCode} | Msg: ${resp?.message}")
-            logSpeech(data?.message, statusCode, resp?.message)
+            logError("postCmdProcess Error | status: ${statusCode} | Msg: ${respMsg}")
+            logSpeech(data?.message, statusCode, respMsg)
             incrementCntByKey("err_cloud_commandPost")
             resetQueue()
             return
@@ -2727,9 +2852,15 @@ def getDtNow() {
 	return formatDt(now, false)
 }
 
+def getIsoDtNow() {
+    def tf = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+    if(location?.timeZone) { tf.setTimeZone(location?.timeZone) }
+    return tf.format(new Date());
+}
+
 def formatDt(dt, mdy = true) {
 	def formatVal = mdy ? "MMM d, yyyy - h:mm:ss a" : "E MMM dd HH:mm:ss z yyyy"
-	def tf = new SimpleDateFormat(formatVal)
+	def tf = new java.text.SimpleDateFormat(formatVal)
 	if(location?.timeZone) { tf.setTimeZone(location?.timeZone) }
 	return tf.format(dt)
 }
@@ -2840,7 +2971,7 @@ Map sequenceBuilder(cmd, val) {
     if (cmd instanceof Map) {
         seqJson = cmd?.sequence ?: cmd
     } else { seqJson = ["@type": "com.amazon.alexa.behaviors.model.Sequence", "startNode": createSequenceNode(cmd, val)] }
-    Map seqObj = [behaviorId: (seqJson?.sequenceId ? cmd?.automationId : "PREVIEW"), sequenceJson: new JsonOutput().toJson(seqJson) as String, status: "ENABLED"]
+    Map seqObj = [behaviorId: (seqJson?.sequenceId ? cmd?.automationId : "PREVIEW"), sequenceJson: new groovy.json.JsonOutput().toJson(seqJson) as String, status: "ENABLED"]
     return seqObj
 }
 
@@ -2853,14 +2984,14 @@ Map multiSequenceBuilder(commands, parallel=false) {
     return seqObj
 }
 
-Map createSequenceNode(command, value) {
+Map createSequenceNode(command, value, devType=null, devSerial=null) {
     try {
         Boolean remDevSpecifics = false
         Map seqNode = [
             "@type": "com.amazon.alexa.behaviors.model.OpaquePayloadOperationNode",
             "operationPayload": [
-                "deviceType": state?.deviceType,
-                "deviceSerialNumber": state?.serialNumber,
+                "deviceType": devType ?: state?.deviceType,
+                "deviceSerialNumber": devSerial ?: state?.serialNumber,
                 "locale": (state?.regionLocale ?: "en-US"),
                 "customerId": state?.deviceOwnerCustomerId
             ]

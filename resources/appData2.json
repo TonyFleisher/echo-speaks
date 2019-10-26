@@ -1,22 +1,26 @@
 {
-    "appDataVer": "3.0",
+    "appDataVer": "3.1",
     "versions": {
         "mainApp": {
-            "ver": "3.1.0.2"
+            "ver": "3.2.0.5"
         },
         "actionApp": {
-            "ver": "3.1.0.1"
+            "ver": "3.2.0.4"
+        },
+        "zoneApp": {
+            "ver": "3.2.0.5"
         },
         "echoDevice": {
-            "ver": "3.1.0.2"
+            "ver": "3.2.0.3"
+        },
+        "wsDevice": {
+            "ver": "3.2.0.1"
         },
         "server": {
-            "ver": "2.2.2"
+            "ver": "2.3.0"
         }
     },
     "settings": {
-        "installNotif": true,
-        "updateNotif": true,
         "sendMetrics": true,
         "database": {
             "metricsUrl": "https://echo-speaks-metrics.firebaseio.com/"
