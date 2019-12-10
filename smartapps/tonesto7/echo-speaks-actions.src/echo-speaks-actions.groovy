@@ -14,8 +14,8 @@
  *
  */
 
-String appVersion()  { return "3.3.0.0" }
-String appModified() { return "2019-11-25" }
+String appVersion()  { return "3.3.0.1" }
+String appModified() { return "2019-12-07" }
 String appAuthor()   { return "Anthony S." }
 Boolean isBeta()     { return false }
 Boolean isST()       { return (getPlatform() == "SmartThings") }
@@ -1498,11 +1498,12 @@ Boolean customMsgConfigured() { return (settings?.notif_use_custom && settings?.
 def actNotifPage() {
     return dynamicPage(name: "actNotifPage", title: "Action Notifications", install: false, uninstall: false) {
         section (sTS("Message Customization:")) {
-            if(customMsgRequired() && !settings?.notif_use_custom) { settingUpdate("notif_use_custom", "true", "bool") }
+            Boolean custMsgReq = customMsgRequired()
+            // if(custMsgReq && !settings?.notif_use_custom) { settingUpdate("notif_use_custom", "true", "bool") }
             paragraph pTS("When using speak and announcements you can leave this off and a notification will be sent with speech text.  For other action types a custom message is required", null, false, "gray")
-            input "notif_use_custom", "bool", title: inTS("Send a custom notification...", getAppImg("question", true)), required: false, defaultValue: customMsgRequired(), submitOnChange: true, image: getAppImg("question")
-            if(settings?.notif_use_custom) {
-                input "notif_custom_message", "text", title: inTS("Enter custom message...", getAppImg("text", true)), required: true, submitOnChange: true, image: getAppImg("text")
+            input "notif_use_custom", "bool", title: inTS("Send a custom notification...", getAppImg("question", true)), required: false, defaultValue: false, submitOnChange: true, image: getAppImg("question")
+            if(settings?.notif_use_custom || custMsgReq) {
+                input "notif_custom_message", "text", title: inTS("Enter custom message...", getAppImg("text", true)), required: custMsgReq, submitOnChange: true, image: getAppImg("text")
             }
         }
 
@@ -1647,6 +1648,10 @@ Boolean executionConfigured() {
     return (opts || devs)
 }
 
+private getLastEchoSpokenTo() {
+    return parent?.getChildDevicesByCap("TTS")?.find { (it?.currentWasLastSpokenToDevice?.toString() == "true") } ?: null
+}
+
 private echoDevicesInputByPerm(type) {
     List echoDevs = parent?.getChildDevicesByCap(type as String)
     Boolean capOk = (type in ["TTS", "announce"])
@@ -1759,6 +1764,7 @@ def initialize() {
     runEvery1Hour("healthCheck")
     updateZoneSubscriptions() // Subscribes to Echo Speaks Zone Activation Events...
     updConfigStatusMap()
+    resumeTierJobs()
 }
 
 def updateZoneSubscriptions() {
@@ -2019,7 +2025,7 @@ def zoneStateHandler(evt) {
 def zoneRemovedHandler(evt) {
     String id = evt?.value?.toString()
     Map data = evt?.jsonData;
-    // log.trace "zone: ${id} | Data: $data"
+    log.trace "zone removed: ${id} | Data: $data"
     if(data && id) {
         Map zoneMap = atomicState?.zoneStatusMap ?: [:]
         if(zoneMap?.containsKey(id as String)) { zoneMap?.remove(id as String) }
@@ -2332,6 +2338,12 @@ def getTierStatusSection() {
         section("Tier Response Status: ") {
             paragraph pTS(str, null, false, "#2678D9"), state: "complete"
         }
+    }
+}
+
+private resumeTierJobs() {
+    if(atomicState?.actTierState?.size() && atomicState?.tierSchedActive) {
+        tierSchedHandler();
     }
 }
 
