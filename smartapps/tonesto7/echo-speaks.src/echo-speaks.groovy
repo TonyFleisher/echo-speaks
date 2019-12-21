@@ -14,12 +14,12 @@
  *
  */
 
-String appVersion()   { return "3.3.0.1" }
-String appModified()   { return "2019-12-07" }
+String appVersion()   { return "3.3.1.1" }
+String appModified()   { return "2019-12-19" }
 String appAuthor()    { return "Anthony S." }
 Boolean isBeta()      { return false }
 Boolean isST()        { return (getPlatform() == "SmartThings") }
-Map minVersions()     { return [echoDevice: 3301, wsDevice: 3200, actionApp: 3301, zoneApp: 3301, server: 230] } //These values define the minimum versions of code this app will work with.
+Map minVersions()     { return [echoDevice: 3301, wsDevice: 3200, actionApp: 3311, zoneApp: 3311, server: 230] } //These values define the minimum versions of code this app will work with.
 
 definition(
     name        : "Echo Speaks",
@@ -60,6 +60,7 @@ preferences {
     page(name: "speechPage")
     page(name: "announcePage")
     page(name: "sequencePage")
+    page(name: "viewZoneHistory")
     page(name: "setNotificationTimePage")
     page(name: "actionDuplicationPage")
     page(name: "zoneDuplicationPage")
@@ -535,24 +536,41 @@ def zonesPage() {
             }
         }
         if(zApps?.size()) {
-            section (sTS("Zone Management:"), hideable: true, hidden: true) {
-                if(activeZones?.size()) {
-                    input "pauseChildZones", "bool", title: inTS("Pause all Zones?", getAppImg("pause_orange", true)), description: "When pausing all Zones you can either restore all or open each zones and manually unpause it.",
-                            defaultValue: false, submitOnChange: true, image: getAppImg("pause_orange")
-                    if(settings?.pauseChildZones) { settingUpdate("pauseChildZones", "false", "bool"); runIn(3, "executeZonePause"); }
-                    if(!isST()) { paragraph pTS("When pausing all zones you can either restore all or open each zone and manually unpause it.", null, false, "gray") }
-                }
-                if(pausedZones?.size()) {
-                    input "unpauseChildZone", "bool", title: inTS("Restore all actions?", getAppImg("pause_orange", true)), defaultValue: false, submitOnChange: true, image: getAppImg("pause_orange")
-                    if(settings?.unpauseChildZones) { settingUpdate("unpauseChildZones", "false", "bool"); runIn(3, "executeZoneUnpause"); }
-                }
-                input "reinitChildZones", "bool", title: inTS("Clear Zones Status and force a full status refresh for all zones?", getAppImg("reset", true)), defaultValue: false, submitOnChange: true, image: getAppImg("reset")
-                if(settings?.reinitChildZones) { settingUpdate("reinitChildZones", "false", "bool"); runIn(3, "executeZoneUpdate"); }
+            section (sTS("Zone History:")) {
+                href "viewZoneHistory", title: inTS("View Zone History", getAppImg("tasks", true)), description: "(Grouped by Zone)", image: getAppImg("tasks"), state: "complete"
             }
+        }
+        section (sTS("Zone Management:"), hideable: true, hidden: true) {
+            if(activeZones?.size()) {
+                input "pauseChildZones", "bool", title: inTS("Pause all Zones?", getAppImg("pause_orange", true)), description: "When pausing all Zones you can either restore all or open each zones and manually unpause it.",
+                        defaultValue: false, submitOnChange: true, image: getAppImg("pause_orange")
+                if(settings?.pauseChildZones) { settingUpdate("pauseChildZones", "false", "bool"); runIn(3, "executeZonePause"); }
+                if(!isST()) { paragraph pTS("When pausing all zones you can either restore all or open each zone and manually unpause it.", null, false, "gray") }
+            }
+            if(pausedZones?.size()) {
+                input "unpauseChildZone", "bool", title: inTS("Restore all actions?", getAppImg("pause_orange", true)), defaultValue: false, submitOnChange: true, image: getAppImg("pause_orange")
+                if(settings?.unpauseChildZones) { settingUpdate("unpauseChildZones", "false", "bool"); runIn(3, "executeZoneUnpause"); }
+            }
+            input "reinitChildZones", "bool", title: inTS("Clear Zones Status and force a full status refresh for all zones?", getAppImg("reset", true)), defaultValue: false, submitOnChange: true, image: getAppImg("reset")
+            if(settings?.reinitChildZones) { settingUpdate("reinitChildZones", "false", "bool"); runIn(3, "executeZoneUpdate"); }
         }
         state?.childInstallOkFlag = true
         state?.zoneDuplicated = false
         updateZoneSubscriptions()
+    }
+}
+
+def viewZoneHistory() {
+    return dynamicPage(name: "viewZoneHistory", uninstall: false, install: false) {
+        List zApps = getZoneApps()
+        zApps?.each { z->
+            section(z?.getLabel()) {
+                List items = z?.getZoneHistory(true) ?: []
+                items?.each { item->
+                    paragraph item as String
+                }
+            }
+        }
     }
 }
 
@@ -1932,7 +1950,9 @@ public getAlexaRoutines(autoId=null, utterOnly=false) {
                     Integer cnt = 1
                     if(rtResp?.size()) {
                         rtResp?.findAll { it?.status == "ENABLED" }?.each { item->
-                            if(utterOnly) {
+                            if(item?.name != null) {
+                                items[item?.automationId] = item?.name
+                            } else {
                                 if(item?.triggers?.size()) {
                                     item?.triggers?.each { trg->
                                         if(trg?.payload?.containsKey("utterance") && trg?.payload?.utterance != null) {
@@ -1943,8 +1963,6 @@ public getAlexaRoutines(autoId=null, utterOnly=false) {
                                         }
                                     }
                                 }
-                            } else {
-                                items[item?.automationId] = item?.name
                             }
                         }
                     }
@@ -4108,7 +4126,8 @@ def renderTextEditPage() {
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Date" data-ssml="evtdate">
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Time" data-ssml="evttime">
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Date/Time" data-ssml="evtdatetime">
-                                                                <input class="ssml-button" type="button" unselectable="on" value="Duration" data-ssml="evtduration">
+                                                                <input class="ssml-button" type="button" unselectable="on" value="Duration (Seconds)" data-ssml="evtduration">
+                                                                <input class="ssml-button" type="button" unselectable="on" value="Duration (Minutes)" data-ssml="evtdurationmin">
                                                             </div>
                                                         </div>
                                                     </div>
@@ -4559,6 +4578,9 @@ def renderTextEditPage() {
                                     break;
                                 case 'evtduration':
                                     insertSsml(editor, '%duration%', false);
+                                    break;
+                                case 'evtdurationmin':
+                                    insertSsml(editor, '%duration_min%', false);
                                     break;
                                 default:
                                     break;
