@@ -1,7 +1,7 @@
 /**
  *  Echo Speaks SmartApp
  *
- *  Copyright 2018, 2019 Anthony Santilli
+ *  Copyright 2018, 2019, 2020 Anthony Santilli
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -14,12 +14,12 @@
  *
  */
 
-String appVersion()   { return "3.2.0.5" }
-String appModified()  { return "2019-10-22" }
+String appVersion()   { return "3.4.0.0" }
+String appModified()  { return "2020-01-24" }
 String appAuthor()    { return "Anthony S." }
 Boolean isBeta()      { return false }
 Boolean isST()        { return (getPlatform() == "SmartThings") }
-Map minVersions()     { return [echoDevice: 3203, wsDevice: 3200, actionApp: 3204, zoneApp: 3205, server: 230] } //These values define the minimum versions of code this app will work with.
+Map minVersions()     { return [echoDevice: 3400, wsDevice: 3200, actionApp: 3400, zoneApp: 3400, server: 230] } //These values define the minimum versions of code this app will work with.
 
 definition(
     name        : "Echo Speaks",
@@ -60,6 +60,7 @@ preferences {
     page(name: "speechPage")
     page(name: "announcePage")
     page(name: "sequencePage")
+    page(name: "viewZoneHistory")
     page(name: "setNotificationTimePage")
     page(name: "actionDuplicationPage")
     page(name: "zoneDuplicationPage")
@@ -112,7 +113,6 @@ def mainPage() {
                 } else { paragraph "Device Management will be displayed after install is complete" }
             }
 
-
             section(sTS("Companion Apps:")) {
                 def zones = getZoneApps()
                 href "zonesPage", title: inTS("Manage Zones${zones?.size() ? " (${zones?.size()} ${zones?.size() > 1 ? "Zones" : "Zone"})" : ""}", getAppImg("es_groups", true)), description: getZoneDesc(), state: (zones?.size() ? "complete" : null), image: getAppImg("es_groups")
@@ -145,6 +145,12 @@ def mainPage() {
             section(sTS("Remove Everything:")) {
                 href "uninstallPage", title: inTS("Uninstall this App", getAppImg("uninstall", true)), description: "Tap to Remove...", image: getAppImg("uninstall")
             }
+            section(sTS("Feature Requests/Issue Reporting"), hideable: true, hidden: true) {
+                def issueUrl = "https://github.com/tonesto7/echo-speaks/issues/new?assignees=tonesto7&labels=bug&template=bug_report.md&title=%28BUG%29+&projects=echo-speaks%2F6"
+                def featUrl = "https://github.com/tonesto7/echo-speaks/issues/new?assignees=tonesto7&labels=enhancement&template=feature_request.md&title=%5BFeature+Request%5D&projects=echo-speaks%2F6"
+                href url: featUrl, style: "external", required: false, title: inTS("New Feature Request", getAppImg("www", true)), description: "Tap to open browser", image: getAppImg("www")
+                href url: issueUrl, style: "external", required: false, title: inTS("Report an Issue", getAppImg("www", true)), description: "Tap to open browser", image: getAppImg("www")
+            }
         } else {
             showDevSharePrefs()
             section(sTS("Important Step:")) {
@@ -172,9 +178,10 @@ def authStatusPage() {
                 Boolean chk4 = (cookieValid == true)
                 String nextRfsh = nextCookieRefreshDur()
                 // log.debug "cookieValid: ${cookieValid} | chk1: $chk1 | chk2: $chl2 | chk3: $chk3 | chk4: $chk4"
-                paragraph pTS("Session Value: (${chk1 ? "OK" : "Missing"})", null, false, chk1 ? "#2784D9" : "red"), state: (chk1 ? "complete" : null), required: true
-                paragraph pTS("CSRF Value: (${chk2 ? "OK" : "Missing"})", null, false, chk2 ? "#2784D9" : "red"), state: (chk2 ? "complete" : null), required: true
-                paragraph pTS("Validated: (${chk4 ? "OK" : "Invalid"})", null, false, chk4 ? "#2784D9" : "red"), state: (chk4 ? "complete" : null), required: true
+                String stat = "Auth Status: (${(chk1 && chk2) ? "OK": "Invalid"})"
+                stat += "\n \u2022 Cookie: (${chk1 ? okSym() : notOkSym()})"
+                stat += "\n \u2022 CSRF Value: (${chk2 ? okSym() : notOkSym()})"
+                paragraph pTS(stat, null, false, (chk1 && chk2) ? "#2784D9" : "red"), state: ((chk1 && chk2) ? "complete" : null), required: true
                 paragraph pTS("Last Refresh: (${chk3 ? "OK" : "Issue"})\n(${seconds2Duration(getLastTsValSecs("lastCookieRrshDt"))})", null, false, chk3 ? "#2784D9" : "red"), state: (chk3 ? "complete" : null), required: true
                 paragraph pTS("Next Refresh:\n(${nextCookieRefreshDur()})", null, false, "#2784D9"), state: "complete", required: true
             }
@@ -330,15 +337,22 @@ def alexaGuardAutoPage() {
         List amo = getAlarmModes()
         Boolean alarmReq = (settings?.guardAwayAlarm || settings?.guardHomeAlarm)
         Boolean modeReq = (settings?.guardAwayModes || settings?.guardHomeModes)
-        section(sTS("Set Guard using ${asn}")) {
+        // Boolean swReq = (settings?.guardAwaySw || settings?.guardHomeSw)
+        section(sTS("Set Guard Using ${asn}")) {
             input "guardHomeAlarm", "enum", title: inTS("Home in ${asn} modes.", getAppImg("alarm_home", true)), description: "Tap to select...", options: amo, required: alarmReq, multiple: true, submitOnChange: true, image: getAppImg("alarm_home")
             input "guardAwayAlarm", "enum", title: inTS("Away in ${asn} modes.", getAppImg("alarm_away", true)), description: "Tap to select...", options: amo, required: alarmReq, multiple: true, submitOnChange: true, image: getAppImg("alarm_away")
         }
 
-        section(sTS("Set Guard using Modes")) {
+        section(sTS("Set Guard Using Modes")) {
             input "guardHomeModes", "mode", title: inTS("Home in these Modes?", getPublicImg("mode", true)), description: "Tap to select...", required: modeReq, multiple: true, submitOnChange: true, image: getAppImg("mode")
             input "guardAwayModes", "mode", title: inTS("Away in these Modes?", getPublicImg("mode", true)), description: "Tap to select...", required: modeReq, multiple: true, submitOnChange: true, image: getAppImg("mode")
         }
+
+        section(sTS("Set Guard Using Switches:")) {
+            input "guardHomeSwitch", "capability.switch", title: inTS("Home when any of these are On?", getAppImg("switch", true)), description: "Tap to select...", multiple: true, required: false, submitOnChange: true, image: getAppImg("switch")
+            input "guardAwaySwitch", "capability.switch", title: inTS("Away when any of these are On?", getAppImg("switch", true)), description: "Tap to select...", multiple: true, required: false, submitOnChange: true, image: getAppImg("switch")
+        }
+
         section(sTS("Set Guard using Presence")) {
             input "guardAwayPresence", "capability.presenceSensor", title: inTS("Away when these devices are All away?", getAppImg("presence", true)), description: "Tap to select...", multiple: true, required: false, submitOnChange: true, image: getAppImg("presence")
         }
@@ -355,7 +369,7 @@ def alexaGuardAutoPage() {
 }
 
 Boolean guardAutoConfigured() {
-    return ((settings?.guardAwayAlarm && settings?.guardHomeAlarm) || (settings?.guardAwayModes && settings?.guardHomeModes) || settings?.guardAwayPresence)
+    return ((settings?.guardAwayAlarm && settings?.guardHomeAlarm) || (settings?.guardAwayModes && settings?.guardHomeModes) || (settings?.guardAwaySwitch && settings?.guardHomeSwitch) || settings?.guardAwayPresence)
 }
 
 String guardAutoDesc() {
@@ -365,6 +379,8 @@ String guardAutoDesc() {
         str += (settings?.guardAwayAlarm && settings?.guardHomeAlarm) ? "\n \u2022 Using ${getAlarmSystemName()}" : ""
         str += settings?.guardHomeModes ? "\n \u2022 Home Modes: (${settings?.guardHomeModes?.size()})" : ""
         str += settings?.guardAwayModes ? "\n \u2022 Away Modes: (${settings?.guardAwayModes?.size()})" : ""
+        str += settings?.guardHomeSwitch ? "\n \u2022 Home Switches: (${settings?.guardHomeSwitch?.size()})" : ""
+        str += settings?.guardAwaySwitch ? "\n \u2022 Away Switches: (${settings?.guardAwaySwitch?.size()})" : ""
         str += settings?.guardAwayPresence ? "\n \u2022 Presence Home: (${settings?.guardAwayPresence?.size()})" : ""
     }
     return str == "" ? "Tap to configure..." : "${str}\n\nTap to configure..."
@@ -386,6 +402,13 @@ def guardTriggerEvtHandler(evt) {
             if(inAwayMode && inHomeMode) { logError("Guard Control Trigger can't act because same mode is in both Home and Away input"); return; }
             if(inAwayMode && !inHomeMode) { newState = "ARMED_AWAY" }
             if(!inAwayMode && inHomeMode) { newState = "ARMED_STAY" }
+            break
+        case "switch":
+            Boolean inAwaySw = isSwitchOn(settings?.guardAwaySwitch)
+            Boolean inHomeSw = isSwitchOn(settings?.guardHomeSwitch)
+            if(inAwaySw && inHomeSw) { logError("Guard Control Trigger can't act because both switch groups are in both Home and Away input"); return; }
+            if(inAwaySw && !inHomeSw) { newState = "ARMED_AWAY" }
+            if(!inAwaySw && inHomeSw) { newState = "ARMED_STAY" }
             break
         case "presence":
             newState = isSomebodyHome(settings?.guardAwayPresence) ? "ARMED_STAY" : "ARMED_AWAY"
@@ -513,6 +536,8 @@ public getDupZoneStateData() {
 def zonesPage() {
     return dynamicPage(name: "zonesPage", nextPage: "mainPage", uninstall: false, install: false) {
         List zApps = getZoneApps()
+        List activeZones = zApps?.findAll { it?.isPaused() != true }
+        List pausedZones = zApps?.findAll { it?.isPaused() == true }
         if(zApps) { /*Nothing to add here yet*/ }
         else {
             section("") { paragraph pTS("You haven't created any Zones yet!\nTap Create New Zone to get Started") }
@@ -526,9 +551,42 @@ def zonesPage() {
                 }
             }
         }
+        if(zApps?.size()) {
+            section (sTS("Zone History:")) {
+                href "viewZoneHistory", title: inTS("View Zone History", getAppImg("tasks", true)), description: "(Grouped by Zone)", image: getAppImg("tasks"), state: "complete"
+            }
+        }
+        section (sTS("Zone Management:"), hideable: true, hidden: true) {
+            if(activeZones?.size()) {
+                input "pauseChildZones", "bool", title: inTS("Pause all Zones?", getAppImg("pause_orange", true)), description: "When pausing all Zones you can either restore all or open each zones and manually unpause it.",
+                        defaultValue: false, submitOnChange: true, image: getAppImg("pause_orange")
+                if(settings?.pauseChildZones) { settingUpdate("pauseChildZones", "false", "bool"); runIn(3, "executeZonePause"); }
+                if(!isST()) { paragraph pTS("When pausing all zones you can either restore all or open each zone and manually unpause it.", null, false, "gray") }
+            }
+            if(pausedZones?.size()) {
+                input "unpauseChildZone", "bool", title: inTS("Restore all actions?", getAppImg("pause_orange", true)), defaultValue: false, submitOnChange: true, image: getAppImg("pause_orange")
+                if(settings?.unpauseChildZones) { settingUpdate("unpauseChildZones", "false", "bool"); runIn(3, "executeZoneUnpause"); }
+            }
+            input "reinitChildZones", "bool", title: inTS("Clear Zones Status and force a full status refresh for all zones?", getAppImg("reset", true)), defaultValue: false, submitOnChange: true, image: getAppImg("reset")
+            if(settings?.reinitChildZones) { settingUpdate("reinitChildZones", "false", "bool"); runIn(3, "executeZoneUpdate"); }
+        }
         state?.childInstallOkFlag = true
         state?.zoneDuplicated = false
         updateZoneSubscriptions()
+    }
+}
+
+def viewZoneHistory() {
+    return dynamicPage(name: "viewZoneHistory", uninstall: false, install: false) {
+        List zApps = getZoneApps()
+        zApps?.each { z->
+            section(z?.getLabel()) {
+                List items = z?.getZoneHistory(true) ?: []
+                items?.each { item->
+                    paragraph item as String
+                }
+            }
+        }
     }
 }
 
@@ -540,6 +598,16 @@ private executeActionUnpause() {
 }
 private executeActionUpdate() {
     getActionApps()?.each { it?.updated() }
+}
+private executeZonePause() {
+    getZoneApps()?.findAll { it?.isPaused() != true }?.each { it?.updatePauseState(true) }
+}
+private executeZoneUnpause() {
+    getZoneApps()?.findAll { it?.isPaused() == true }?.each { it?.updatePauseState(false) }
+}
+private executeZoneUpdate() {
+    atomicState?.zoneStatusMap = [:]
+    getZoneApps()?.each { it?.updated() }
 }
 
 def devicePrefsPage() {
@@ -729,9 +797,6 @@ Map getAllDevices(isInputEnum=false) {
 
 def notifPrefPage() {
     dynamicPage(name: "notifPrefPage", install: false) {
-        Integer pollWait = 900
-        Integer pollMsgWait = 3600
-        Integer updNotifyWait = 7200
         section("") {
             paragraph title: "Notice:", pTS("The settings configure here are used by both the App and the Devices.", getAppImg("info", true), true, "#2784D9"), state: "complete"
         }
@@ -776,13 +841,8 @@ def notifPrefPage() {
             section(sTS("Missed Poll Alerts:")) {
                 input (name: "sendMissedPollMsg", type: "bool", title: inTS("Send Missed Checkin Alerts?", getAppImg("late", true)), defaultValue: true, submitOnChange: true, image: getAppImg("late"))
                 if(settings?.sendMissedPollMsg) {
-                    def misPollNotifyWaitValDesc = settings?.misPollNotifyWaitVal ?: "Default: 45 Minutes"
-                    input (name: "misPollNotifyWaitVal", type: "enum", title: inTS("Time Past the Missed Checkin?", getAppImg("delay_time", true)), required: false, defaultValue: 2700, options: notifValEnum(), submitOnChange: true, image: getAppImg("delay_time"))
-                    if(settings?.misPollNotifyWaitVal) { pollWait = settings?.misPollNotifyWaitVal as Integer }
-
-                    def misPollNotifyMsgWaitValDesc = settings?.misPollNotifyMsgWaitVal ?: "Default: 1 Hour"
-                    input (name: "misPollNotifyMsgWaitVal", type: "enum", title: inTS("Send Reminder After?", getAppImg("reminder", true)), required: false, defaultValue: 3600, options: notifValEnum(), submitOnChange: true, image: getAppImg("reminder"))
-                    if(settings?.misPollNotifyMsgWaitVal) { pollMsgWait = settings?.misPollNotifyMsgWaitVal as Integer }
+                    input (name: "misPollNotifyWaitVal", type: "enum", title: inTS("Time Past the Missed Checkin?", getAppImg("delay_time", true)), description: "Default: 45 Minutes", required: false, defaultValue: 2700, options: notifValEnum(), submitOnChange: true, image: getAppImg("delay_time"))
+                    input (name: "misPollNotifyMsgWaitVal", type: "enum", title: inTS("Send Reminder After?", getAppImg("reminder", true)), description: "Default: 1 Hour", required: false, defaultValue: 3600, options: notifValEnum(), submitOnChange: true, image: getAppImg("reminder"))
                 }
             }
             section(sTS("Cookie Refresh Alert:")) {
@@ -791,15 +851,10 @@ def notifPrefPage() {
             section(sTS("Code Update Alerts:")) {
                 input "sendAppUpdateMsg", "bool", title: inTS("Send for Updates...", getAppImg("update", true)), defaultValue: true, submitOnChange: true, image: getAppImg("update")
                 if(settings?.sendAppUpdateMsg) {
-                    def updNotifyWaitValDesc = settings?.updNotifyWaitVal ?: "Default: 12 Hours"
-                    input (name: "updNotifyWaitVal", type: "enum", title: inTS("Send Reminders After?", getAppImg("reminder", true)), required: false, defaultValue: 43200, options: notifValEnum(), submitOnChange: true, image: getAppImg("reminder"))
-                    if(settings?.updNotifyWaitVal) { updNotifyWait = settings?.updNotifyWaitVal as Integer }
+                    input (name: "updNotifyWaitVal", type: "enum", title: inTS("Send Reminders After?", getAppImg("reminder", true)), description: "Default: 12 Hours", required: false, defaultValue: 43200, options: notifValEnum(), submitOnChange: true, image: getAppImg("reminder"))
                 }
             }
         } else { state.pushTested = false }
-        state.misPollNotifyWaitVal = pollWait
-        state.misPollNotifyMsgWaitVal = pollMsgWait
-        state.updNotifyWaitVal = updNotifyWait
     }
 }
 
@@ -1155,12 +1210,16 @@ def initialize() {
     if(app?.getLabel() != "Echo Speaks") { app?.updateLabel("Echo Speaks") }
     if(settings?.optOutMetrics == true && state?.appGuid) { if(removeInstallData()) { state?.appGuid = null } }
     if(!state?.resumeConfig) { subscribe(app, onAppTouch) }
-    if((settings?.guardHomeAlarm && settings?.guardAwayAlarm) || settings?.guardHomeModes || settings?.guardAwayModes || settings?.guardAwayPresence) {
+    if(guardAutoConfigured()) {
         if(settings?.guardAwayAlarm && settings?.guardHomeAlarm) {
             subscribe(location, "${!isST() ? "hsmStatus" : "alarmSystemStatus"}", guardTriggerEvtHandler)
         }
         if(settings?.guardAwayModes && settings?.guardHomeModes) {
             subscribe(location, "mode", guardTriggerEvtHandler)
+        }
+        if(settings?.guardAwaySwitch && settings?.guardHomeSwitch) {
+            if(settings?.guardHomeSwitch) subscribe(settings?.guardHomeSwitch, "switch", guardTriggerEvtHandler)
+            if(settings?.guardAwaySwitch) subscribe(settings?.guardAwaySwitch, "switch", guardTriggerEvtHandler)
         }
         if(settings?.guardAwayPresence) {
             subscribe(settings?.guardAwayPresence, "presence", guardTriggerEvtHandler)
@@ -1208,7 +1267,7 @@ def uninstalled() {
 }
 
 private appCleanup() {
-    List items = ["availableDevices", "consecutiveCmdCnt", "isRateLimiting", "versionData", "heartbeatScheduled", "serviceAuthenticated", "cookie"]
+    List items = ["availableDevices", "consecutiveCmdCnt", "isRateLimiting", "versionData", "heartbeatScheduled", "serviceAuthenticated", "cookie", "misPollNotifyWaitVal", "misPollNotifyMsgWaitVal", "updNotifyWaitVal"]
     items?.each { si-> if(state?.containsKey(si as String)) { state?.remove(si)} }
     state?.pollBlocked = false
     state?.resumeConfig = false
@@ -1273,12 +1332,17 @@ def zoneStateHandler(evt) {
 def zoneRemovedHandler(evt) {
     String id = evt?.value?.toString()
     Map data = evt?.jsonData;
-    // log.trace "zone: ${id} | Data: $data"
+    log.trace "zone removed: ${id} | Data: $data"
     if(data && id) {
         Map zoneMap = atomicState?.zoneStatusMap ?: [:]
         if(zoneMap?.containsKey(id as String)) { zoneMap?.remove(id as String) }
         atomicState?.zoneStatusMap = zoneMap
     }
+}
+
+private requestZoneRefresh() {
+    atomicState?.zoneStatusMap = [:]
+    sendLocationEvent(name: "es3ZoneRefresh", value: "sendStatus", data: [sendStatus: true], isStateChange: true)
 }
 
 public Map getZones() {
@@ -1408,7 +1472,7 @@ private checkIfCodeUpdated() {
         if(zApps?.size() && state?.codeVersions?.zoneApp && state?.codeVersions?.zoneApp != zApps[0]?.appVersion()) {
             chgs?.push("zoneApp")
             state?.pollBlocked = true
-            log.debug "zoneVer: ${zApps[0]?.appVersion()}"
+            // log.debug "zoneVer: ${zApps[0]?.appVersion()}"
             updCodeVerMap("zoneApp", zApps[0]?.appVersion())
             codeUpdated = true
         }
@@ -1906,7 +1970,9 @@ public getAlexaRoutines(autoId=null, utterOnly=false) {
                     Integer cnt = 1
                     if(rtResp?.size()) {
                         rtResp?.findAll { it?.status == "ENABLED" }?.each { item->
-                            if(utterOnly) {
+                            if(item?.name != null) {
+                                items[item?.automationId] = item?.name
+                            } else {
                                 if(item?.triggers?.size()) {
                                     item?.triggers?.each { trg->
                                         if(trg?.payload?.containsKey("utterance") && trg?.payload?.utterance != null) {
@@ -1917,8 +1983,6 @@ public getAlexaRoutines(autoId=null, utterOnly=false) {
                                         }
                                     }
                                 }
-                            } else {
-                                items[item?.automationId] = item?.name
                             }
                         }
                     }
@@ -2158,14 +2222,14 @@ def respExceptionHandler(ex, String mName, ignOn401=false, ignNullMsg=false) {
         } else if(sCode == 429) {
             logWarn("${mName} | Too Many Requests Made to Amazon | Msg: ${errMsg}")
         } else {
-            logError("${mName} Response Exception | Status: (${sCode}) | Msg: ${errMsg}")
+            logError("${mName} | Response Exception | Status: (${sCode}) | Msg: ${errMsg}")
         }
     } else if(ex instanceof java.net.SocketTimeoutException) {
-        logError("${mName} Response Socket Timeout | Msg: ${ex?.getMessage()}")
+        logError("${mName} | Response Socket Timeout (Possibly an Amazon Issue) | Msg: ${ex?.getMessage()}")
     } else if(ex instanceof org.apache.http.conn.ConnectTimeoutException) {
-        logError("${mName} Request Timeout | Msg: ${ex?.getMessage()}")
+        logError("${mName} | Request Timeout | Msg: ${ex?.getMessage()}")
     } else if(ex instanceof java.net.UnknownHostException) {
-        logError("${mName} HostName Not Found | Msg: ${ex?.getMessage()}")
+        logError("${mName} | HostName Not Found (Possibly an Amazon/Internet Issue) | Msg: ${ex?.getMessage()}")
     } else { logError("${mName} Exception: ${ex}") }
 }
 
@@ -2242,6 +2306,10 @@ private getEchoDevices() {
 def echoDevicesResponse(response, data) {
     List ignoreTypes = getDeviceTypesMap()?.ignore ?: ["A1DL2DVDQVK3Q", "A21Z3CGI8UIP0F", "A2825NDLA7WDZV", "A2IVLV5VM2W81", "A2TF17PFR55MTB", "A1X7HJX9QL16M5", "A2T0P32DY3F7VB", "A3H674413M2EKB", "AILBSA2LNTOYL"]
     List removeKeys = ["appDeviceList", "charging", "macAddress", "deviceTypeFriendlyName", "registrationId", "remainingBatteryLevel", "postalCode", "language"]
+    List removeCaps = [
+        "SUPPORTS_CONNECTED_HOME", "SUPPORTS_CONNECTED_HOME_ALL", "SUPPORTS_CONNECTED_HOME_CLOUD_ONLY", "ALLOW_LOG_UPLOAD", "FACTORY_RESET_DEVICE", "DIALOG_INTERFACE_VERSION",
+        "SUPPORTS_SOFTWARE_VERSION", "REQUIRES_OOBE_FOR_SETUP", "DEREGISTER DEVICE", "PAIR_REMOTE", "SET_LOCALE", "DEREGISTER_FACTORY_RESET"
+    ]
     try {
         // log.debug "json response is: ${response.json}"
         state?.deviceRefreshInProgress=false
@@ -2251,6 +2319,7 @@ def echoDevicesResponse(response, data) {
             eDevData?.each { eDevice->
                 if (!(eDevice?.deviceType in ignoreTypes) && !eDevice?.accountName?.startsWith("This Device")) {
                     removeKeys?.each { rk-> eDevice?.remove(rk as String) }
+                    eDevice?.capabilities = eDevice?.capabilities?.findAll { !(it in removeCaps) }?.collect { it as String }
                     if (eDevice?.deviceOwnerCustomerId != null) { state?.deviceOwnerCustomerId = eDevice?.deviceOwnerCustomerId }
                     echoDevices[eDevice?.serialNumber] = eDevice
                 }
@@ -2262,6 +2331,15 @@ def echoDevicesResponse(response, data) {
     } catch (ex) {
         respExceptionHandler(ex, "echoDevicesResponse")
     }
+}
+
+def getUnknownDevices() {
+    List items = []
+    state?.unknownDevices?.each {
+        it?.description = "What kind of device/model?(PLEASE UPDATE THIS)"
+        if(items?.size() < 5) items?.push(it)
+    }
+    return items
 }
 
 def receiveEventData(Map evtData, String src) {
@@ -2286,6 +2364,7 @@ def receiveEventData(Map evtData, String src) {
                 Map echoDeviceMap = [:]
                 Map allEchoDevices = [:]
                 Map skippedDevices = [:]
+                List unknownDevices = []
                 List curDevFamily = []
                 Integer cnt = 0
                 String devAcctId = null
@@ -2331,6 +2410,7 @@ def receiveEventData(Map evtData, String src) {
                         }
                         return
                     }
+                    // if(isBypassBlock && familyAllowed?.reason == "Family Blocked" || isBlocked == true) { return }
 
                     echoValue["unsupported"] = (unsupportedDevice == true)
                     echoValue["authValid"] = (state?.authValid == true)
@@ -2371,13 +2451,22 @@ def receiveEventData(Map evtData, String src) {
                     echoValue["musicProviders"] = evtData?.musicProviders
                     echoValue["permissionMap"] = permissions
                     echoValue["hasClusterMembers"] = (echoValue?.clusterMembers && echoValue?.clusterMembers?.size() > 0) ?: false
+
+                    if(deviceStyleData?.name?.toString()?.toLowerCase()?.contains("unknown")) {
+                        unknownDevices?.push([
+                            name: echoValue?.accountName,
+                            family: echoValue?.deviceFamily,
+                            type: echoValue?.deviceType,
+                            permissions: permissions?.findAll {it?.value == true}?.collect {it?.key as String}?.join(", ")?.toString()
+                        ])
+                    }
                     // echoValue["mainAccountCommsId"] = state?.accountCommIds?.find { it?.value?.signedInUser == true && it?.value?.isChild == false }?.key as String ?: null
                     // logWarn("Device Permisions | Name: ${echoValue?.accountName} | $permissions")
 
                     echoDeviceMap[echoKey] = [
                         name: echoValue?.accountName, online: echoValue?.online, family: echoValue?.deviceFamily, serialNumber: echoKey,
                         style: echoValue?.deviceStyle, type: echoValue?.deviceType, mediaPlayer: isMediaPlayer, announceSupport: permissions?.announce,
-                        ttsSupport: allowTTS, volumeSupport: volumeSupport, clusterMembers: echoValue?.clusterMembers, broadcastSupport: permissions?.broadcast,
+                        ttsSupport: allowTTS, volumeSupport: volumeSupport, clusterMembers: echoValue?.clusterMembers,
                         musicProviders: evtData?.musicProviders?.collect{ it?.value }?.sort()?.join(", "), supported: (unsupportedDevice != true)
                     ]
 
@@ -2424,6 +2513,7 @@ def receiveEventData(Map evtData, String src) {
                 state?.allEchoDevices = allEchoDevices
                 state?.skippedDevices = skippedDevices
                 state?.deviceStyleCnts = curDevFamily?.countBy { it }
+                state?.unknownDevices = unknownDevices
             } else {
                 log.warn "No Echo Device Data Sent... This may be the first transmission from the service after it started up!"
             }
@@ -2603,21 +2693,19 @@ private sendAmazonCommand(String method, Map params, Map otherData=null) {
         def rData = null
         def rStatus = null
         switch(method) {
-            case "post":
             case "POST":
-                httpPost(params) { response->
+                httpPostJson(params) { response->
                     rData = response?.data ?: null
                     rStatus = response?.status
                 }
                 break
-            case "put":
             case "PUT":
-                httpPut(params) { response->
+                if(params?.body) { params?.body = new groovy.json.JsonOutput().toJson(params?.body) }
+                httpPutJson(params) { response->
                     rData = response?.data ?: null
                     rStatus = response?.status
                 }
                 break
-            case "delete":
             case "DELETE":
                 httpDelete(params) { response->
                     rData = response?.data ?: null
@@ -2625,22 +2713,22 @@ private sendAmazonCommand(String method, Map params, Map otherData=null) {
                 }
                 break
         }
-        logDebug("sendAmazonCommand | Status: (${response?.status})${rData != null ? " | Response: ${rData}" : ""} | ${otherData?.cmdDesc} was Successfully Sent!!!")
+        logDebug("sendAmazonCommand | Status: (${rStatus})${rData != null ? " | Response: ${rData}" : ""} | ${otherData?.cmdDesc} was Successfully Sent!!!")
     } catch (ex) {
-        respExceptionHandler(ex, "${otherData?.cmdDesc}")
+        respExceptionHandler(ex, "${otherData?.cmdDesc}", true)
     }
 }
 
 private sendSequenceCommand(type, command, value) {
     // logTrace("sendSequenceCommand($type) | command: $command | value: $value", true)
     Map seqObj = sequenceBuilder(command, value)
-    sendAmazonCommand("post", [
+    sendAmazonCommand("POST", [
         uri: getAmazonUrl(),
         path: "/api/behaviors/preview",
         headers: [ Cookie: getCookieVal(), csrf: getCsrfVal() ],
         contentType: "application/json",
-        body: seqObj
-    ], [cmdDesc: "SequenceCommand_${type}"])
+        body: new groovy.json.JsonOutput().toJson(seqObj)
+    ], [cmdDesc: "SequenceCommand (${type})"])
 }
 
 private sendMultiSequenceCommand(commands, String srcDesc, Boolean parallel=false) {
@@ -2682,7 +2770,7 @@ private healthCheck() {
     if(!isST() && getSocketDevice()?.isSocketActive() != true) { getSocketDevice()?.triggerInitialize() }
     if(state?.isInstalled && getLastTsValSecs("lastMetricUpdDt") > (3600*24)) { runIn(30, "sendInstallData", [overwrite: true]) }
     if(!getOk2Notify()) { return }
-    missPollNotify((settings?.sendMissedPollMsg == true), (state?.misPollNotifyMsgWaitVal ?: 3600))
+    missPollNotify((settings?.sendMissedPollMsg == true), (settings?.misPollNotifyMsgWaitVal as Integer ?: 3600))
     appUpdateNotify()
     if(advLogsActive()) { logsDisable() }
 }
@@ -2692,9 +2780,9 @@ public logsEnabled() { if(advLogsActive() && getTsVal("logsEnabled")) { updTsVal
 public logsDisable() { Integer dtSec = getLastTsValSecs("logsEnabled", null); if(dtSec && (dtSec > 3600*6) && advLogsActive()) { settingUpdate("logDebug", "false", "bool"); settingUpdate("logTrace", "false", "bool"); remTsVal("logsEnabled"); } }
 
 private missPollNotify(Boolean on, Integer wait) {
-    log.trace("missPollNotify() | on: ($on) | wait: ($wait) | getLastDevicePollSec: (${getLastTsValSecs("lastDevDataUpdDt")}) | misPollNotifyWaitVal: (${state?.misPollNotifyWaitVal}) | getLastMisPollMsgSec: (${getLastTsValSecs("lastMissedPollMsgDt")})")
-    if(!on || !wait || !(getLastTsValSecs("lastMissedPollMsgDt") > (state?.misPollNotifyWaitVal ?: 2700))) { return }
-    if(!(getLastTsValSecs("lastMissedPollMsgDt") > wait.toInteger())) {
+    logTrace("missPollNotify() | on: ($on) | wait: ($wait) | getLastDevicePollSec: (${getLastTsValSecs("lastDevDataUpdDt")}) | misPollNotifyWaitVal: (${settings?.misPollNotifyWaitVal}) | getLastMisPollMsgSec: (${getLastTsValSecs("lastMissedPollMsgDt")})")
+    if(!on || !wait) { return; }
+    if(getLastTsValSecs("lastDevDataUpdDt", 840) <= (settings?.misPollNotifyWaitVal as Integer ?: 2700)) {
         state?.missPollRepair = false
         return
     } else {
@@ -2703,7 +2791,7 @@ private missPollNotify(Boolean on, Integer wait) {
             initialize()
             return
         }
-        state?.missPollRepair = true
+        if(!(getLastTsValSecs("lastMissedPollMsgDt") > wait?.toInteger())) { return; }
         String msg = ""
         if(state?.authValid) {
             msg = "\nThe Echo Speaks app has NOT received any device data from Amazon in the last (${getLastTsValSecs("lastDevDataUpdDt")}) seconds.\nThere maybe an issue with the scheduling.  Please open the app and press Done/Save."
@@ -2726,8 +2814,8 @@ private appUpdateNotify() {
     Boolean echoDevUpd = echoDevUpdAvail()
     Boolean socketUpd = socketUpdAvail()
     Boolean servUpd = serverUpdAvail()
-    logDebug("appUpdateNotify() | on: (${on}) | appUpd: (${appUpd}) | actUpd: (${appUpd}) | zoneUpd: (${zoneUpd}) | echoDevUpd: (${echoDevUpd}) | servUpd: (${servUpd}) | getLastUpdMsgSec: ${getLastTsValSecs("lastUpdMsgDt")} | state?.updNotifyWaitVal: ${state?.updNotifyWaitVal}")
-    if(state?.updNotifyWaitVal && getLastTsValSecs("lastUpdMsgDt") > state?.updNotifyWaitVal.toInteger()) {
+    logDebug("appUpdateNotify() | on: (${on}) | appUpd: (${appUpd}) | actUpd: (${appUpd}) | zoneUpd: (${zoneUpd}) | echoDevUpd: (${echoDevUpd}) | servUpd: (${servUpd}) | getLastUpdMsgSec: ${getLastTsValSecs("lastUpdMsgDt")} | updNotifyWaitVal: ${settings?.updNotifyWaitVal}")
+    if(settings?.updNotifyWaitVal && getLastTsValSecs("lastUpdMsgDt") > settings?.updNotifyWaitVal?.toInteger()) {
         if(on && (appUpd || actUpd || zoneUpd || echoDevUpd || socketUpd || servUpd)) {
             state?.updateAvailable = true
             def str = ""
@@ -3154,6 +3242,47 @@ private getWebData(params, desc, text=true) {
     }
 }
 
+
+// TODO: https://m.media-amazon.com/images/G/01/mobile-apps/dex/ask-tech-docs/ask-soundlibrary._TTH_.json
+Map getAvailableSounds() {
+    return [
+        // Bells and Buzzer
+        bells: "bell_02",
+        buzzer: "buzzers_pistols_01",
+        church_bell: "amzn_sfx_church_bell_1x_02",
+        doorbell1: "amzn_sfx_doorbell_01",
+        doorbell2: "amzn_sfx_doorbell_chime_01",
+        doorbell3: "amzn_sfx_doorbell_chime_02",
+        // Holidays
+        xmas_bells: "christmas_05",
+        halloween_door: "horror_10",
+        // Misc
+        air_horn: "air_horn_03",
+        boing1: "boing_01",
+        boing2: "boing_03",
+        camera: "camera_01",
+        squeaky_door: "squeaky_12",
+        ticking_clock: "clock_01",
+        trumpet: "amzn_sfx_trumpet_bugle_04",
+        // Animals
+        cat_meow: "amzn_sfx_cat_meow_1x_01",
+        dog_bark: "amzn_sfx_dog_med_bark_1x_02",
+        lion_roar: "amzn_sfx_lion_roar_02",
+        rooster: "amzn_sfx_rooster_crow_01",
+        wolf_howl: "amzn_sfx_wolf_howl_02",
+        // Scifi
+        aircraft: "futuristic_10",
+        engines: "amzn_sfx_scifi_engines_on_02",
+        red_alert: "amzn_sfx_scifi_alarm_04",
+        shields: "amzn_sfx_scifi_sheilds_up_01",
+        sirens: "amzn_sfx_scifi_alarm_01",
+        zap: "zap_01",
+        // Crowds
+        applause: "amzn_sfx_crowd_applause_01",
+        cheer: "amzn_sfx_large_crowd_cheer_01"
+    ]
+}
+
 /******************************************
 |    Diagnostic Data
 *******************************************/
@@ -3249,7 +3378,7 @@ private getDiagDataJson() {
             devices: [
                 version: state?.codeVersions?.echoDevice ?: null,
                 count: echoDevs?.size() ?: 0,
-                lastDataUpdDt: updTsVal("lastDevDataUpdDt"),
+                lastDataUpdDt: getTsVal("lastDevDataUpdDt"),
                 models: state?.deviceStyleCnts ?: [:],
                 warnings: devWarnings,
                 errors: devErrors,
@@ -3469,7 +3598,7 @@ def GetTimeDiffSeconds(lastDate, sender=null) {
         def start = Date.parse("E MMM dd HH:mm:ss z yyyy", formatDt(lastDt)).getTime()
         def stop = Date.parse("E MMM dd HH:mm:ss z yyyy", formatDt(now)).getTime()
         def diff = (int) (long) (stop - start) / 1000
-        return diff
+        return diff?.abs()
     } catch (ex) {
         logError("GetTimeDiffSeconds Exception: (${sender ? "$sender | " : ""}lastDate: $lastDate): ${ex}")
         return 10000
@@ -3755,6 +3884,8 @@ String getInputToStringDesc(inpt, addSpace = null) {
     return (str != "") ? "${str}" : null
 }
 
+
+
 def appInfoSect()	{
     Map codeVer = state?.codeVersions ?: null
     String str = ""
@@ -3802,6 +3933,18 @@ def appInfoSect()	{
             if(!isNote) { paragraph pTS("No Issues to Report", null, true) }
         }
     }
+    List unkDevs = getUnknownDevices()
+    if(unkDevs?.size()) {
+        section() {
+            Map params = [ assignees: "tonesto7", labels: "add_device_support", title: "[ADD DEVICE SUPPORT] (${unkDevs?.size()}) Devices", body: "Requesting device support from the following device(s):\n" + unkDevs?.collect { d-> d?.collect { k,v-> "${k}: ${v}" }?.join("\n") }?.join("\n\n")?.toString() ]
+            def featUrl = "https://github.com/tonesto7/echo-speaks/issues/new?${UrlParamBuilder(params)}"
+            href url: featUrl, style: "external", required: false, title: inTS("Unknown Devices Found\n\nSend device info to the Developer on GitHub?", getAppImg("info", true)), description: "Tap to open browser", image: getAppImg("info")
+        }
+    }
+}
+
+String UrlParamBuilder(items) {
+    return items?.collect { k,v -> "${k}=${URLEncoder.encode(v?.toString())}" }?.join("&") as String
 }
 
 def getRandomItem(items) {
@@ -4003,7 +4146,8 @@ def renderTextEditPage() {
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Date" data-ssml="evtdate">
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Time" data-ssml="evttime">
                                                                 <input class="ssml-button" type="button" unselectable="on" value="Date/Time" data-ssml="evtdatetime">
-                                                                <input class="ssml-button" type="button" unselectable="on" value="Duration" data-ssml="evtduration">
+                                                                <input class="ssml-button" type="button" unselectable="on" value="Duration (Seconds)" data-ssml="evtduration">
+                                                                <input class="ssml-button" type="button" unselectable="on" value="Duration (Minutes)" data-ssml="evtdurationmin">
                                                             </div>
                                                         </div>
                                                     </div>
@@ -4164,7 +4308,8 @@ def renderTextEditPage() {
                     function cleanEditorText(txt) {
                         txt = txt.split(';').filter(t => t.trim().length > 0).map(t => t.trim()).join(';');
                         txt = txt.endsWith(';') ? txt.replace(/;([^;]*)\$/, '\$1') : txt;
-                        return txt.replace(/  +/g, ' ').replace('> <', '><');
+                        txt = txt.replace('%duration_min%', '%durationmin%');
+                        return txt.replace(/  +/g, ' ').replace('> <', '><').replace("\'", '');
                     }
 
                     \$(document).ready(function() {
@@ -4455,6 +4600,9 @@ def renderTextEditPage() {
                                 case 'evtduration':
                                     insertSsml(editor, '%duration%', false);
                                     break;
+                                case 'evtdurationmin':
+                                    insertSsml(editor, '%durationmin%', false);
+                                    break;
                                 default:
                                     break;
                             }
@@ -4492,6 +4640,13 @@ String getTextEditorPath(cId, inName) {
     return getAppEndpointUrl("textEditor/${cId}/${inName}") as String
 }
 
+def okSym() {
+    return "\u2713"
+}
+def notOkSym() {
+    return "\u2715"
+}
+
 String getObjType(obj) {
     if(obj instanceof String) {return "String"}
     else if(obj instanceof GString) {return "GString"}
@@ -4509,8 +4664,8 @@ String getObjType(obj) {
     else { return "unknown"}
 }
 
-private List amazonDomainOpts() { return ["amazon.com", "amazon.ca", "amazon.co.uk", "amazon.com.au", "amazon.de", "amazon.it", "amazon.com.br", "amazon.com.mx"] }
-private List localeOpts() { return ["en-US", "en-CA", "de-DE", "en-GB", "it-IT", "en-AU", "pt-BR", "es-MX", "es-UY"] }
+private List amazonDomainOpts() { return (state?.appData && state?.appData?.amazonDomains?.size()) ? state?.appData?.amazonDomains : ["amazon.com", "amazon.ca", "amazon.co.uk", "amazon.com.au", "amazon.de", "amazon.it", "amazon.com.br", "amazon.com.mx"] }
+private List localeOpts() { return (state?.appData && state?.appData?.locales?.size()) ? state?.appData?.locales : ["en-US", "en-CA", "de-DE", "en-GB", "it-IT", "en-AU", "pt-BR", "es-MX", "es-UY"] }
 
 private getPlatform() {
     def p = "SmartThings"

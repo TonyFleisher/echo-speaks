@@ -1,17 +1,17 @@
 {
-    "appDataVer": "3.1",
+    "appDataVer": "3.4",
     "versions": {
         "mainApp": {
-            "ver": "3.2.0.5"
+            "ver": "3.4.0.0"
         },
         "actionApp": {
-            "ver": "3.2.0.4"
+            "ver": "3.4.0.0"
         },
         "zoneApp": {
-            "ver": "3.2.0.5"
+            "ver": "3.4.0.0"
         },
         "echoDevice": {
-            "ver": "3.2.0.3"
+            "ver": "3.4.0.0"
         },
         "wsDevice": {
             "ver": "3.2.0.1"
@@ -20,6 +20,8 @@
             "ver": "2.3.0"
         }
     },
+    "amazonDomains": ["amazon.com", "amazon.ca", "amazon.co.uk", "amazon.com.au", "amazon.de", "amazon.it", "amazon.com.br", "amazon.com.mx", "amazon.es", "amazon.in"],
+    "locales": ["en-US", "en-CA", "de-DE", "en-GB", "it-IT", "en-AU", "pt-BR", "es-MX", "es-UY", "es-ES"],
     "settings": {
         "sendMetrics": true,
         "database": {
@@ -43,7 +45,29 @@
             "ADQRVG6LYK4LQ",
             "A1VZJGJYCRI78V",
             "ABP0V5EHO8A4U",
-            "A2TOXM6L8SFS8A"
+            "A2TOXM6L8SFS8A",
+            "A2ZOTUOF1IBEYI",
+            "A3NWHXTQ4EBCZS",
+            "A3TCJ8RTT3NVI7",
+            "ATH4K2BAIXVHQ",
+            "A2Y04QPFCANLPQ",
+            "A1ORT4KZ23OY88",
+            "A37M7RU8Z6ZFB",
+            "A29L394LN0I8HN",
+            "A2XPGY5LRKB9BE",
+            "A1VS6XVTGTLC00",
+            "A2C8J6UHV0KFCV",
+            "A1ZB65LA390I4K",
+            "A21X6I4DKINIZU",
+            "A112LJ20W14H95",
+            "A81PNL0A63P93",
+            "A1GC6GEE1XF1G9",
+            "AUPUQSVCVHXP0",
+            "AD2YUJTRVBNOF",
+            "AGZWSPR7FLP9E",
+            "A2V3E2XUH5Z7M8",
+            "A1MPSLFC7L5AFK"
+
         ]
     },
     "deviceFamilies": {
@@ -59,22 +83,56 @@
             "WHA"
         ],
         "other": [
-            "REAVER"
+            "REAVER",
+            "FIRE_TV",
+            "FIRE_TV_CUBE",
+            "ALEXA_AUTO",
+            "MMSDK"
         ],
         "block": [
             "AMAZONMOBILEMUSIC_ANDROID",
+            "AMAZONMOBILEMUSIC_IOS",
             "TBIRD_IOS",
-            "VOX"
+            "TBIRD_ANDROID",
+            "VOX",
+            "MSHOP"
         ]
     },
     "deviceSupport": {
+        "A1Q7QCGNMXAKYW": {
+            "name": "Generic Tablet",
+            "image": "amazon_tablet",
+            "caps": [],
+            "blocked": true
+        },
+        "A3SSWQ04XYPXBH": {
+            "name": "Generic Tablet",
+            "image": "amazon_tablet",
+            "caps": [],
+            "blocked": true
+        },
         "A1X7HJX9QL16M5": {
             "name": "Bespoken.io",
             "caps": [],
             "blocked": true
         },
         "A37SHHQ3NUL7B5": {
-            "name": "Bose Homespeaker",
+            "name": "Bose Home Speaker 500",
+            "caps": [],
+            "blocked": true
+        },
+        "AVN2TMX8MU2YM": {
+            "name": "Bose Home Speaker 500",
+            "caps": [],
+            "blocked": true
+        },
+        "A3BRT6REMPQWA8": {
+            "name": "Bose Home Speaker 450",
+            "caps": ["a", "t"],
+            "image": "sonos_generic"
+        },
+        "A1H0CMF1XM0ZP4": {
+            "name": "Bose SoundTouch 30",
             "caps": [],
             "blocked": true
         },
@@ -87,6 +145,43 @@
             "name": "Mobile App",
             "blocked": true,
             "caps": []
+        },
+        "A25EC4GIHFOCSG": {
+            "name": "Unrecognized Media Player",
+            "caps": [],
+            "blocked": true
+        },
+        "A3RBAYBE7VM004": {
+            "name": "Echo Studio",
+            "image": "echo_studio",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A3VRME03NAXFUB": {
+            "name": "Generic Echo",
+            "image": "unknown",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A16MZVIFVHX6P6": {
+            "name": "Generic Echo",
+            "image": "unknown",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A27VEYGQBW3YR5": {
+            "name": "Echo Link",
+            "image": "echo_link",
+            "caps": [
+                "a",
+                "t"
+            ]
         },
         "A1JJ0KFC4ZPNJ3": {
             "name": "Echo Input",
@@ -115,6 +210,14 @@
         "A7WXQPH584YP": {
             "name": "Echo (Gen2)",
             "image": "echo_gen2",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A3FX4UWTP28V1P": {
+            "name": "Echo (Gen3)",
+            "image": "echo_plus_gen2",
             "caps": [
                 "a",
                 "t"
@@ -161,8 +264,16 @@
             ]
         },
         "A4ZP7ZC4PI6TO": {
-            "name": "Echo Show 5",
+            "name": "Echo Show 5 (Gen1)",
             "image": "echo_show_5",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A1Z88NGR2BK6A2": {
+            "name": "Echo Show?",
+            "image": "echo_show_gen2",
             "caps": [
                 "a",
                 "t"
@@ -192,9 +303,33 @@
                 "t"
             ]
         },
+        "A32DDESGESSHZA": {
+            "name": "Echo Dot (Gen3)",
+            "image": "echo_dot_gen3",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A30YDR2MK8HMRV": {
+            "name": "Echo Dot Clock",
+            "image": "echo_dot_clock",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
         "A10A33FOX2NUBK": {
             "name": "Echo Spot",
             "image": "echo_spot_gen1",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A3VRME03NAXFUB": {
+            "name": "Echo Flex",
+            "image": "echo_flex",
             "caps": [
                 "a",
                 "t"
@@ -256,8 +391,40 @@
                 "t"
             ]
         },
+        "A1F8D55J0FWDTN": {
+            "name": "Fire TV (Toshiba)",
+            "image": "toshiba_firetv",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "AP4RS91ZQ0OOI": {
+            "name": "Fire TV (Toshiba)",
+            "image": "toshiba_firetv",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "AFF50AL5E3DIU": {
+            "name": "Fire TV (Insignia)",
+            "image": "insignia_firetv",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
         "A3HF4YRA2L7XGC": {
             "name": "Fire TV Cube",
+            "image": "firetv_cube",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A2JKHJ0PX4J3L3": {
+            "name": "Fire TV Cube (Gen2)",
             "image": "firetv_cube",
             "caps": [
                 "a",
@@ -272,12 +439,44 @@
                 "t"
             ]
         },
+        "A2HZENIFNYTXZD": {
+            "name": "Facebook Portal",
+            "image": "facebook_portal",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A3B5K1G3EITBIF": {
+            "name": "Facebook Portal",
+            "image": "facebook_portal",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
         "A1J16TEDOYCZTN": {
             "name": "Fire Tablet",
             "image": "amazon_tablet",
             "caps": [
                 "a",
                 "t"
+            ]
+        },
+        "A2R2GLZH1DFYQO": {
+            "name": "Zolo Halo Speaker",
+            "image": "halo_speaker",
+            "caps": [
+                "t",
+                "a"
+            ]
+        },
+        "A1P31Q3MOWSHOD": {
+            "name": "Zolo Halo Speaker",
+            "image": "halo_speaker",
+            "caps": [
+                "t",
+                "a"
             ]
         },
         "A1M0A9L9HDBID3": {
@@ -288,6 +487,14 @@
             ]
         },
         "A38EHHIB10L47V": {
+            "name": "Fire Tablet HD 8",
+            "image": "tablet_hd10",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A3L0T0VL9A921N": {
             "name": "Fire Tablet HD 8",
             "image": "tablet_hd10",
             "caps": [
@@ -318,6 +525,11 @@
             "image": "sonos_generic",
             "caps": []
         },
+        "AVD3HM0HOJAAL": {
+            "name": "Sonos",
+            "image": "sonos_generic",
+            "caps": []
+        },
         "A3NPD82ABCPIDP": {
             "name": "Sonos Beam",
             "image": "sonos_beam",
@@ -336,8 +548,11 @@
         "A1N9SW0I0LUX5Y": {
             "name": "Ford/Lincoln Alexa App",
             "image": "unknown",
-            "caps": [],
-            "blocked": true
+            "caps": [
+                "a",
+                "t"
+            ],
+            "blocked": false
         },
         "A1C66CX2XD756O": {
             "name": "Fire Tablet HD",
@@ -393,9 +608,33 @@
                 "t"
             ]
         },
+        "AVE5HX13UR5NO": {
+            "name": "Logitech Zero Touch",
+            "image": "logitech_zero_touch",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
         "A10L5JEZTKKCZ8": {
             "name": "Vobot Bunny",
             "image": "vobot_bunny",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "AE7X7Z227NFNS": {
+            "name": "HiMirror Mini",
+            "image": "unknown",
+            "caps": [
+                "a",
+                "t"
+            ]
+        },
+        "A347G2JC8I4HC7": {
+            "name": "Roav Car Charger Pro",
+            "image": "unknown",
             "caps": [
                 "a",
                 "t"
@@ -426,6 +665,14 @@
             "name": "Stereo/Subwoofer Pair",
             "blocked": true,
             "caps": []
+        },
+        "A1W2YILXTG9HA7": {
+            "name": "Nextbase 522GW Dashcam",
+            "image": "unknown",
+            "caps": [
+                "t",
+                "a"
+            ]
         }
     }
 }
