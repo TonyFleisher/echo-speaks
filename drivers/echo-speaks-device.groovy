@@ -13,8 +13,8 @@
  *  for the specific language governing permissions and limitations under the License.
  */
 
-String devVersion()  { return "3.4.0.0"}
-String devModified() { return "2020-01-24" }
+String devVersion()  { return "3.5.0.0"}
+String devModified() { return "2020-02-13" }
 Boolean isBeta()     { return false }
 Boolean isST()       { return (getPlatform() == "SmartThings") }
 Boolean isWS()       { return false }
@@ -143,6 +143,7 @@ metadata {
             input "logError", "bool", title: "Show Error Logs?",  required: false, defaultValue: true
             input "logDebug", "bool", title: "Show Debug Logs?", description: "Only leave on when required", required: false, defaultValue: false
             input "logTrace", "bool", title: "Show Detailed Logs?", description: "Only Enabled when asked by the developer", required: false, defaultValue: false
+            input "ignoreTimeoutErrors", "bool", required: false, title: "Don't show errors in the logs for request timeouts?", description: "", defaultValue: true
 
             input "disableQueue", "bool", required: false, title: "Don't Allow Queuing?", defaultValue: false
             input "disableTextTransform", "bool", required: false, title: "Disable Text Transform?", description: "This will attempt to convert items in text like temp units and directions like `WSW` to west southwest", defaultValue: false
@@ -863,46 +864,23 @@ private getNotifications(type="Reminder", all=false) {
 }
 
 private getDeviceActivity() {
-    Map params = [
-        uri: getAmazonUrl(),
-        path: "/api/activities",
-        query: [ startTime:"", size:"50", offset:"-1" ],
-        headers: [Cookie: getCookieVal(), csrf: getCsrfVal()],
-        contentType: "application/json"
-    ]
     try {
-        httpGet(params) { response->
-            List newList = []
-            def sData = response?.data ?: null
-            Boolean wasLastDevice = false
-            def actTS = null
-            if (sData && sData?.activities != null) {
-                def lastCommand = sData?.activities?.find {
-                    (it?.domainAttributes == null || it?.domainAttributes.startsWith("{")) &&
-                    it?.activityStatus?.equals("SUCCESS") &&
-                    it?.utteranceId?.startsWith(it?.sourceDeviceIds?.deviceType)
-                }
-                if (lastCommand) {
-                    def lastDescription = new groovy.json.JsonSlurper().parseText(lastCommand?.description)
-                    def spokenText = lastDescription?.summary
-                    def lastDevice = lastCommand?.sourceDeviceIds?.get(0)
-                    if(lastDevice?.serialNumber == state?.serialNumber) {
-                        wasLastDevice = true
-                        if(isStateChange(device, "lastVoiceActivity", spokenText?.toString())) {
-                            sendEvent(name: "lastVoiceActivity", value: spokenText?.toString(), display: false, displayed: false)
-                        }
-                        if(isStateChange(device, "lastSpokenToTime", lastCommand?.creationTimestamp?.toString())) {
-                            sendEvent(name: "lastSpokenToTime", value: lastCommand?.creationTimestamp, display: false, displayed: false)
-                        }
-                    }
-                }
-                if(isStateChange(device, "wasLastSpokenToDevice", wasLastDevice?.toString())) {
-                    sendEvent(name: "wasLastSpokenToDevice", value: wasLastDevice, display: false, displayed: false)
-                }
+        def aData = parent?.getActivityData(state?.serialNumber) ?: null
+        Boolean wasLastDevice = (aData?.lastSpokenTo == true)
+        if (aData != null) {
+            if(isStateChange(device, "lastVoiceActivity", aData?.spokenText?.toString())) {
+                sendEvent(name: "lastVoiceActivity", value: aData?.spokenText?.toString(), display: false, displayed: false)
+            }
+            if(isStateChange(device, "lastSpokenToTime", aData?.lastSpokenDt?.toString())) {
+                sendEvent(name: "lastSpokenToTime", value: aData?.lastSpokenDt?.toString(), display: false, displayed: false)
             }
         }
+        if(isStateChange(device, "wasLastSpokenToDevice", wasLastDevice?.toString())) {
+            log.debug "wasLastSpokenToDevice: ${wasLastDevice}"
+            sendEvent(name: "wasLastSpokenToDevice", value: wasLastDevice, display: false, displayed: false)
+        }
     } catch (ex) {
-        respExceptionHandler(ex, "getDeviceActivity")
+        logError("updDeviceActivity Error: ${ex.message}")
     }
 }
 
@@ -1035,11 +1013,11 @@ def respExceptionHandler(ex, String mName, clearOn401=false, ignNullMsg=false) {
             logError("${mName} Response Exception | Status: (${sCode}) | Msg: ${errMsg}")
         }
     } else if(ex instanceof java.net.SocketTimeoutException) {
-        logError("${mName} | Response Socket Timeout (Possibly an Amazon Issue) | Msg: ${ex?.getMessage()}")
+        if(settings?.ignoreTimeoutErrors == true) logError("${mName} | Response Socket Timeout (Possibly an Amazon Issue) | Msg: ${ex?.getMessage()}")
     } else if(ex instanceof java.net.UnknownHostException) {
         logError("${mName} | HostName Not Found | Msg: ${ex?.getMessage()}")
     } else if(ex instanceof org.apache.http.conn.ConnectTimeoutException) {
-        logError("${mName} | Request Timeout (Possibly an Amazon/Internet Issue) | Msg: ${ex?.getMessage()}")
+        if(settings?.ignoreTimeoutErrors == true) logError("${mName} | Request Timeout (Possibly an Amazon/Internet Issue) | Msg: ${ex?.getMessage()}")
     } else { logError("${mName} Exception: ${ex}") }
 }
 
@@ -1882,9 +1860,11 @@ private createNotification(type, opts) {
     }
     def now = new Date()
     def createdDate = now.getTime()
-    def addSeconds = new Date(createdDate + 1 * 60000);
-    def alarmTime = type != "Timer" ? addSeconds.getTime() : 0
-    // log.debug "addSeconds: $addSeconds | alarmTime: $alarmTime"
+
+    def isoFormat = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm")
+    isoFormat.setTimeZone(location.timeZone)
+    def alarmDate = isoFormat.parse("${opts.date}T${opts.time}")
+    def alarmTime = alarmDate.getTime()
     Map params = [
         uri: getAmazonUrl(),
         path: "/api/notifications/create${type}",
@@ -1895,7 +1875,7 @@ private createNotification(type, opts) {
             status: "ON",
             alarmTime: alarmTime,
             createdDate: createdDate,
-            originalTime: type != "Timer" ? "${opts?.time}.00.000" : null,
+            originalTime: type != "Timer" ? "${opts?.time}:00.000" : null,
             originalDate: type != "Timer" ? opts?.date : null,
             timeZoneId: null,
             reminderIndex: null,
@@ -1903,14 +1883,12 @@ private createNotification(type, opts) {
             deviceSerialNumber: state?.serialNumber,
             deviceType: state?.deviceType,
             timeZoneId: null,
-            recurrenceEligibility: false,
             alarmLabel: type == "Alarm" ? opts?.label : null,
             reminderLabel: type == "Reminder" ? opts?.label : null,
             reminderSubLabel: "Echo Speaks",
             timerLabel: type == "Timer" ? opts?.label : null,
             skillInfo: null,
             isSaveInFlight: type != "Timer" ? true : null,
-            triggerTime: 0,
             id: "create${type}",
             isRecurring: false,
             remainingDuration: type != "Timer" ? 0 : opts?.timerDuration
@@ -1929,6 +1907,11 @@ private createNotification(type, opts) {
     }
 }
 
+// For simple recurring, all that is needed is the "recurringPattern":
+// once per day: "P1D"
+// weekly on one day: "XXXX-WXX-3" => Weds
+// weekdays: "XXXX-WD"
+// weekends: "XXXX-WE"
 private transormRecurString(type, opt, tm, dt) {
     log.debug "transormRecurString(type: ${type}, opt: ${opt}, time: ${tm},date: ${dt})"
     Map rd = null
@@ -3191,3 +3174,4 @@ Map createSequenceNode(command, value, devType=null, devSerial=null) {
         logError("createSequenceNode Exception: ${ex}")
         return [:]
     }
+}
