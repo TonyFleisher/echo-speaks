@@ -15,10 +15,9 @@
  // This is based on the Amazon WebSocket used on Alexa.amazon.com and is ported from Javascript to Groovy and inspired from the work of @Apollon77 Alexa-Remote
 
 // NOTICE: This device will not work on SmartThings
-//TODO: Restore beta to false and change url to master repo
 
-String devVersion()  { return "3.2.0.1"}
-String devModified() { return "2020-01-17" }
+String devVersion()  { return "3.3.0.0"}
+String devModified() { return "2020-03-06" }
 Boolean isBeta()     { return false }
 Boolean isST()       { return (getPlatform() == "SmartThings") }
 Boolean isWS()       { return true }
@@ -390,7 +389,7 @@ private commandEvtHandler(msg) {
                 break
             case "PUSH_ACTIVITY":
                 logDebug("Command: ${msg?.command} | Payload: ${msg?.payload}")
-                def keys = msg?.payload?.key?.entityId?.tokenize("#")
+                def keys = msg?.payload?.key?.entryId?.tokenize("#")
                 if(keys?.size() && keys[2]) {
                     sendEvt = true
                     evt?.id = keys[2]
@@ -609,12 +608,12 @@ def parseDt(dt, dtFmt) {
     return Date.parse(dtFmt, dt)
 }
 private addToLogHistory(String logKey, msg, statusData, Integer max=10) {
-    Boolean ssOk = (stateSizePerc() > 70)
+    Boolean ssOk = (stateSizePerc() <= 70)
     List eData = state?.containsKey(logKey as String) ? state[logKey as String] : []
     if(eData?.find { it?.message == msg }) { return; }
     if(status) { eData.push([dt: getDtNow(), message: msg, status: statusData]) }
     else { eData.push([dt: getDtNow(), message: msg]) }
-	if(!ssOK || eData?.size() > max) { eData = eData?.drop( (eData?.size()-max) ) }
+	if(!ssOK || eData?.size() > max) { eData = eData?.drop( (eData?.size()-max)+1 ) }
 	state[logKey as String] = eData
 }
 private logDebug(msg) { if(settings?.logDebug == true) { log.debug "Socket (v${devVersion()}) | ${msg}" } }

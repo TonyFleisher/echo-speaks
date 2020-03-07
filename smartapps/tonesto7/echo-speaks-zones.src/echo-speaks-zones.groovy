@@ -14,8 +14,8 @@
  *
  */
 
-String appVersion()  { return "3.5.0.0" }
-String appModified() { return "2020-02-10" }
+String appVersion()  { return "3.6.1.0" }
+String appModified() { return "2020-03-06" }
 String appAuthor()	 { return "Anthony S." }
 Boolean isBeta()     { return false }
 Boolean isST()       { return (getPlatform() == "SmartThings") }
@@ -777,9 +777,9 @@ def zoneTimeStopCondHandler() {
 }
 
 private addToZoneHistory(evt, condStatus, Integer max=10) {
-    Boolean ssOk = (stateSizePerc() > 70)
+    Boolean ssOk = (stateSizePerc() <= 70)
     List eData = atomicState?.zoneHistory ?: []
-    eData.push([dt: getDtNow(), active: (condStatus?.ok == true), evtName: evt?.name, evtDevice: evt?.displayName, blocks: condStatus?.blocks, passed: condStatus?.passed])
+    eData?.push([dt: getDtNow(), active: (condStatus?.ok == true), evtName: evt?.name, evtDevice: evt?.displayName, blocks: condStatus?.blocks, passed: condStatus?.passed])
     if(!ssOk || eData?.size() > max) { eData = eData?.drop( (eData?.size()-max)+1 ) }
     atomicState?.zoneHistory = eData
 }
@@ -848,8 +848,9 @@ def updateZoneStatus(data) {
     }
 }
 
-public getZoneHistory(asList=false) {
+public getZoneHistory(asObj=false) {
     List zHist = atomicState?.zoneHistory ?: []
+    Boolean isST = isST()
     List output = []
     if(zHist?.size()) {
         zHist?.each { h->
@@ -857,14 +858,14 @@ public getZoneHistory(asList=false) {
             str += "Trigger: [${h?.evtName}]"
             str += "\nDevice: [${h?.evtDevice}]"
             str += "\nZone Status: ${h?.active ? "Activate" : "Deactivate"}"
-            str += "\nDateTime: ${h?.dt}"
             str += "\nConditions Passed: ${h?.passed}"
             str += "\nConditions Blocks: ${h?.blocks}"
+            str += "\nDateTime: ${h?.dt}"
             output?.push(str)
         }
     } else { output?.push("No History Items Found...") }
-    if(!asList) {
-        output?.each { paragraph it as String }
+    if(!asObj) {
+        output?.each { i-> paragraph pTS(i) }
     } else { return output }
 }
 
@@ -1626,7 +1627,7 @@ Integer stateSize() {
 Integer stateSizePerc() { return (int) ((stateSize() / 100000)*100).toDouble().round(0) }
 
 private addToLogHistory(String logKey, msg, Integer max=10) {
-    Boolean ssOk = (stateSizePerc() > 70)
+    Boolean ssOk = (stateSizePerc() <= 70)
     List eData = atomicState[logKey as String] ?: []
     eData.push([dt: getDtNow(), message: msg])
     if(!ssOk || eData?.size() > max) { eData = eData?.drop( (eData?.size()-max)+1 ) }
@@ -1667,8 +1668,8 @@ public getDuplSettingData() {
         ],
         ends: [
             bool: ["_all", "_avg", "_once", "_send_push", "_use_custom", "_stop_on_clear", "_db"],
-            enum: ["_cmd", "_type", "_time_start_type", "cond_time_stop_type", "_routineExecuted", "_scheduled_sunState", "_scheduled_recurrence", "_scheduled_days", "_scheduled_weeks", "_scheduled_months", "_scheduled_daynums", "_scheduled_type", "_routine_run", "_mode_run"],
-            number: ["_wait", "_low", "_high", "_equal", "_delay", "_volume", "_scheduled_sunState_offset", "_after", "_after_repeat"],
+            enum: ["_cmd", "_type", "_time_start_type", "cond_time_stop_type", "_routineExecuted", "_scheduled_sunState", "_scheduled_recurrence", "_scheduled_days", "_scheduled_weeks", "_scheduled_months", "_scheduled_daynums", "_scheduled_type", "_routine_run", "_mode_run", "_webCorePistons", "_rt", "_rt_wd"],
+            number: ["_wait", "_low", "_high", "_equal", "_delay", "_cnt", "_volume", "_scheduled_sunState_offset", "_after", "_after_repeat", "_rt_ed", "_volume_change", "_volume_restore"],
             text: ["_txt", "_sms_numbers"],
             time: ["_time_start", "_time_stop", "_scheduled_time"]
         ],
@@ -1696,7 +1697,8 @@ public getDuplSettingData() {
             _lock_code: "lock",
             _switches_off: "switch",
             _switches_on: "switch",
-            _lights: "level"
+            _lights: "level",
+            _color: "colorControl"
         ],
         dev: [
             _scene: "sceneActivator"
