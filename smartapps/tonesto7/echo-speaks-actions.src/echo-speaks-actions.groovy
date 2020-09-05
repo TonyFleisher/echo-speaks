@@ -14,8 +14,8 @@
  *
  */
 
-String appVersion()  { return "3.6.2.0" }
-String appModified() { return "2020-04-22" }
+String appVersion()  { return "3.6.3.2" }
+String appModified() { return "2020-08-18" }
 String appAuthor()   { return "Anthony S." }
 Boolean isBeta()     { return false }
 Boolean isST()       { return (getPlatform() == "SmartThings") }
@@ -65,7 +65,7 @@ preferences {
 def startPage() {
     if(parent != null) {
         if(!state?.isInstalled && parent?.childInstallOk() != true) { return uhOhPage() }
-        else { state?.isParent = false; return (checkMinVersion()) ? codeUpdatePage() : mainPage(); }
+        else { state?.isParent = false; return (minVersionFailed()) ? codeUpdatePage() : mainPage(); }
     } else { return uhOhPage(); }
 }
 
@@ -112,7 +112,7 @@ private buildTriggerEnum() {
         //TODO: Once I can find a reliable method to list the scenes and subscribe to events on Hubitat I will re-activate
         // buildItems?.Location?.scene = "Scenes"
     }
-    buildItems["Sensor Devices"] = ["contact":"Contacts | Doors | Windows", "battery":"Battery Level", "motion":"Motion", "illuminance": "Illuminance/Lux", "presence":"Presence", "temperature":"Temperature", "humidity":"Humidity", "water":"Water", "power":"Power", "acceleration":"Accelerometers"]?.sort{ it?.value }
+    buildItems["Sensor Devices"] = ["contact":"Contacts | Doors | Windows", "battery":"Battery Level", "motion":"Motion", "illuminance": "Illuminance/Lux", "presence":"Presence", "temperature":"Temperature", "humidity":"Humidity", "water":"Water", "power":"Power", "acceleration":"Accelorometers"]?.sort{ it?.value }
     buildItems["Actionable Devices"] = ["lock":"Locks", "button":"Buttons", "switch":"Switches/Outlets", "level":"Dimmers/Level", "door":"Garage Door Openers", "valve":"Valves", "shade":"Window Shades", "thermostat":"Thermostat"]?.sort{ it?.value }
     if(!isST()) {
         buildItems["Actionable Devices"]?.remove("button")
@@ -423,7 +423,7 @@ def triggersPage() {
             }
 
             if (valTrigEvt("acceleration")) {
-                trigNonNumSect("acceleration", "accelerationSensor", "Accelerometers", "Accelerometers", ["active", "inactive", "any"], "changes to", ["active", "inactive"], "acceleration", trigItemCnt++)
+                trigNonNumSect("acceleration", "accelerationSensor", "Accelorometers", "Accelorometers", ["active", "inactive", "any"], "changes to", ["active", "inactive"], "acceleration", trigItemCnt++)
             }
 
             if (valTrigEvt("door")) {
@@ -700,7 +700,9 @@ def conditionsPage() {
                 paragraph pTS("Notice:\n${(settings?.cond_require_all == true) ? "All selected conditions must pass before this zone will be marked active." : "Any condition will make this zone active."}", null, false, "#2784D9"), state: "complete"
             }
         }
+        if(!multiConds && settings?.cond_require_all == true) { settingUpdate("cond_require_all", "false", "bool") }
         section(sTS("Time/Date")) {
+            // input "test_time", "time", title: "Trigger Time?", required: false, submitOnChange: true, image: getAppImg("clock")
             href "condTimePage", title: inTS("Time Schedule", getAppImg("clock", true)), description: getTimeCondDesc(false), state: (timeCondConfigured() ? "complete" : null), image: getAppImg("clock")
             input "cond_days", "enum", title: inTS("Days of the week", getAppImg("day_calendar", true)), multiple: true, required: false, submitOnChange: true, options: weekDaysEnum(), image: getAppImg("day_calendar")
             input "cond_months", "enum", title: inTS("Months of the year", getAppImg("day_calendar", true)), multiple: true, required: false, submitOnChange: true, options: monthEnum(), image: getAppImg("day_calendar")
@@ -723,7 +725,7 @@ def conditionsPage() {
 
         condNonNumSect("contact", "contactSensor", "Door, Window, Contact Sensors Conditions", "Contact Sensors", ["open","closed"], "are", "contact")
 
-        condNonNumSect("acceleration", "accelerationSensor", "Accelerometer Conditions", "Accelerometer Sensors", ["active","inactive"], "are", "acceleration")
+        condNonNumSect("acceleration", "accelerationSensor", "Accelorometer Conditions", "Accelorometer Sensors", ["active","inactive"], "are", "acceleration")
 
         condNonNumSect("lock", "lock", "Lock Conditions", "Smart Locks", ["locked", "unlocked"], "are", "lock")
 
@@ -1744,7 +1746,7 @@ private echoDevicesInputByPerm(type) {
             input "act_EchoZones", "enum", title: inTS("Zone(s) to Use", getAppImg("es_groups", true)), description: "Select the Zones", options: echoZones?.collectEntries { [(it?.key): it?.value?.name as String] }, multiple: true, required: (!settings?.act_EchoDevices), submitOnChange: true, image: getAppImg("es_groups")
         }
         if(settings?.act_EchoZones?.size() && echoDevs?.size() && !settings?.act_EchoDevices?.size()) {
-            paragraph pTS("There may times when none of your zones are active at the time of action execution.\nYou have the option to select devices to use when no zones are available.", null, false, "#2678D9")
+            paragraph pTS("There may be times when none of your zones are active at the time of action execution.\nYou have the option to select devices to use when no zones are available.", null, false, "#2678D9")
         }
         if(echoDevs?.size()) {
             Boolean devsOpt = (settings?.act_EchoZones?.size())
@@ -1761,7 +1763,7 @@ private actionVolumeInputs(devices, showVolOnly=false, showAlrmVol=false) {
             input "act_alarm_volume", "number", title: inTS("Alarm Volume\n(Optional)", getAppImg("speed_knob", true)), range: "0..100", required: false, submitOnChange: true, image: getAppImg("speed_knob")
         }
     } else {
-        if(devices && settings?.actionType in ["speak", "announcement", "weather", "sounds", "builtin", "music", "calendar", "playback"]) {
+        if((devices || settings?.act_EchoZones) && settings?.actionType in ["speak", "announcement", "weather", "sounds", "builtin", "music", "calendar", "playback"]) {
             Map volMap = devsSupportVolume(devices)
             section(sTS("Volume Options:")) {
                 if(volMap?.n?.size() > 0 && volMap?.n?.size() < devices?.size()) { paragraph "Some of the selected devices do not support volume control" }
@@ -2038,7 +2040,7 @@ Boolean schedulesConfigured() {
 }
 
 private subscribeToEvts() {
-    if(checkMinVersion()) { logError("CODE UPDATE required to RESUME operation.  No events will be monitored.", true); return; }
+    if(minVersionFailed ()) { logError("CODE UPDATE required to RESUME operation.  No events will be monitored.", true); return; }
     if(isPaused()) { logWarn("Action is PAUSED... No Events will be subscribed to or scheduled....", true); return; }
     settings?.triggerEvents?.each { te->
         if(te == "scheduled" || settings?."trig_${te}") {
@@ -2689,7 +2691,9 @@ Boolean timeCondOk() {
             startTime = toDateTime(startTime)
             stopTime = toDateTime(stopTime)
         }
-        return timeOfDayIsBetween(startTime, stopTime, new Date(), location?.timeZone)
+        Boolean isBtwn = timeOfDayIsBetween(startTime, stopTime, now, location?.timeZone)
+        log.debug "TimeCheck | CurTime: (${now}) is between ($startTime and $stopTime) | ${isBtwn}"
+        return isBtwn
     } else { return null }
 }
 
@@ -3626,7 +3630,15 @@ public pushover_handler(evt){Map pmd=state?.pushoverManager?:[:];switch(evt?.val
 //Builds Map Message object to send to Pushover Manager
 private buildPushMessage(List devices,Map msgData,timeStamp=false){if(!devices||!msgData){return};Map data=[:];data?.appId=app?.getId();data.devices=devices;data?.msgData=msgData;if(timeStamp){data?.msgData?.timeStamp=new Date().getTime()};pushover_msg(devices,data);}
 Integer versionStr2Int(str) { return str ? str.toString()?.replaceAll("\\.", "")?.toInteger() : null }
-Boolean checkMinVersion() { return (versionStr2Int(appVersion()) < parent?.minVersions()["actionApp"]) }
+Boolean minVersionFailed() {
+    try {
+        Integer minDevVer = parent?.minVersions()["actionApp"] ?: null
+        if(minDevVer != null && versionStr2Int(devVersion()) < minDevVer) { return true }
+        else { return false }
+    } catch (e) { 
+        return false
+    }
+}
 
 
 /************************************************************************************************************
@@ -3871,10 +3883,10 @@ Boolean isMonthOfYear(opts) {
     return ( opts?.contains(dtMap?.monthName) )
 }
 
-Boolean isTimeOfDay(startTime, stopTime) {
+Boolean isTimeBetween(startTime, stopTime, curTime= new Date()) {
     if(!startTime && !stopTime) { return true }
     if(!isST()) { startTime = toDateTime(startTime); stopTime = toDateTime(stopTime); }
-    return timeOfDayIsBetween(startTime, stopTime, new Date(), location.timeZone)
+    return timeOfDayIsBetween(startTime, stopTime, curTime, location?.timeZone)
 }
 
 /******************************************

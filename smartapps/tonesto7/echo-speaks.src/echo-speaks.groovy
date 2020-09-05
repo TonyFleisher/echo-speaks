@@ -14,12 +14,12 @@
  *
  */
 
-String appVersion()   { return "3.6.2.0" }
-String appModified()  { return "2020-04-22" }
+String appVersion()   { return "3.6.3.1" }
+String appModified()  { return "2020-07-19" }
 String appAuthor()    { return "Anthony S." }
 Boolean isBeta()      { return false }
 Boolean isST()        { return (getPlatform() == "SmartThings") }
-Map minVersions()     { return [echoDevice: 3620, wsDevice: 3300, actionApp: 3620, zoneApp: 3620, server: 240] } //These values define the minimum versions of code this app will work with.
+Map minVersions()     { return [echoDevice: 3631, wsDevice: 3311, actionApp: 3631, zoneApp: 3631, server: 250] } //These values define the minimum versions of code this app will work with.
 
 definition(
     name        : "Echo Speaks",
@@ -938,7 +938,7 @@ def speechPage() {
             if(test_speechDevices?.size() >= 3) { paragraph "Amazon will Rate Limit more than 3 device commands at a time.  There will be a delay in the other devices but they should play the test after a few seconds", state: null}
             input "test_speechVolume", "number", title: inTS("Speak at this volume"), description: "Enter number", range: "0..100", defaultValue: 30, required: false, submitOnChange: true
             input "test_speechRestVolume", "number", title: inTS("Restore to this volume after"), description: "Enter number", range: "0..100", defaultValue: null, required: false, submitOnChange: true
-            input "test_speechMessage", "text", title: inTS("Message to Speak"), defaultValue: "This is a speach test for your Echo speaks device!!!", required: true, submitOnChange: true
+            input "test_speechMessage", "text", title: inTS("Message to Speak"), defaultValue: "This is a speech test for your Echo speaks device!!!", required: true, submitOnChange: true
         }
         if(settings?.test_speechDevices) {
             section() {
@@ -1261,12 +1261,14 @@ def initialize() {
     if(!state?.resumeConfig) {
         updateZoneSubscriptions()
         validateCookie(true)
-        runEvery1Minute("getOtherData")
-        runEvery10Minutes("getEchoDevices") //This will reload the device list from Amazon
-        // runEvery1Minute("getEchoDevices") //This will reload the device list from Amazon
-        runIn(11, "postInitialize")
-        getOtherData()
-        getEchoDevices()
+        if(state?.noAuthActive != true) {
+            runEvery1Minute("getOtherData")
+            runEvery10Minutes("getEchoDevices") //This will reload the device list from Amazon
+            // runEvery1Minute("getEchoDevices") //This will reload the device list from Amazon
+            runIn(11, "postInitialize")
+            getOtherData()
+            getEchoDevices()
+        } else { unschedule("getEchoDevices"); unschedule("getOtherData"); }
     }
 }
 
@@ -1285,6 +1287,7 @@ def updateZoneSubscriptions() {
 }
 
 def postInitialize() {
+    logTrace("postInitialize")
     runEvery5Minutes("healthCheck") // This task checks for missed polls, app updates, code version changes, and cloud service health
     appCleanup()
     reInitChildDevices()
@@ -1626,10 +1629,25 @@ private updateChildAuth(Boolean isValid) {
     (isST() ? app?.getChildDevices(true) : getChildDevices())?.each { (isValid) ? it?.updateCookies([cookie: getCookieVal(), csrf: getCsrfVal()]) : it?.removeCookies(true); }
 }
 
+private authValidationEvent(Boolean valid, String src=null) {
+    Integer listSize = 3
+    List eList = atomicState?.authValidHistory ?: [true, true, true]
+    eList.push(valid)
+    if(eList?.size() > listSize) { eList = eList?.drop( eList?.size()-listSize ) }
+    atomicState?.authValidHistory = eList
+    if(eList?.every { it == false }) {
+        if(state?.noAuthActive != true) {
+            logError("The last 3 Authentication Validations have failed | Clearing Stored Auth Data | Please login again using the Echo Speaks service...")
+        }
+        authEvtHandler(false, src)
+        return
+    } else { authEvtHandler(true) }
+}
+
 private authEvtHandler(Boolean isAuth, String src=null) {
     // log.debug "authEvtHandler(${isAuth})"
     state?.authValid = (isAuth == true)
-    if(isAuth == false && !state?.noAuthActive) {
+    if(isAuth == false && state?.noAuthActive != true) {
         clearCookieData()
         noAuthReminder()
         if(settings?.sendCookieInvalidMsg != false && getLastTsValSecs("lastCookieInvalidMsgDt") > 28800) {
@@ -1640,12 +1658,10 @@ private authEvtHandler(Boolean isAuth, String src=null) {
         state?.noAuthActive = true
         state?.authEvtClearReason = [dt: getDtNow(), src: src]
         updateChildAuth(isAuth)
-    } else {
-        if(state?.noAuthActive) {
-            unschedule("noAuthReminder")
-            state?.noAuthActive = false
-            runIn(10, "initialize", [overwrite: true])
-        }
+    } else if(isAuth == false && state?.noAuthActive) {
+        unschedule("noAuthReminder")
+        state?.noAuthActive = false
+        runIn(10, "initialize", [overwrite: true])
     }
 }
 
@@ -1656,6 +1672,8 @@ Boolean isAuthValid(methodName) {
     }
     return true
 }
+
+private noAuthReminder() { logWarn("Amazon Cookie Has Expired or is Missing!!! Please login again using the Heroku Web Config page...") }
 
 String toQueryString(Map m) {
     return m.collect { k, v -> "${k}=${URLEncoder.encode(v?.toString(), "utf-8").replaceAll("\\+", "%20")}" }?.sort().join("&")
@@ -1843,21 +1861,6 @@ private userCommIds() {
         respExceptionHandler(ex, "userCommIds")
     }
 }
-
-private authValidationEvent(Boolean valid, String src=null) {
-    Integer listSize = 3
-    List eList = atomicState?.authValidHistory ?: [true, true, true]
-    eList.push(valid)
-    if(eList?.size() > listSize) { eList = eList?.drop( eList?.size()-listSize ) }
-    atomicState?.authValidHistory = eList
-    if(eList?.every { it == false }) {
-        logError("The last 3 Authentication Validations have failed | Clearing Stored Auth Data | Please login again using the Echo Speaks service...")
-        authEvtHandler(false, src)
-        return
-    } else { authEvtHandler(true) }
-}
-
-private noAuthReminder() { logWarn("Amazon Cookie Has Expired or is Missing!!! Please login again using the Heroku Web Config page...") }
 
 public childInitiatedRefresh() {
     Integer lastRfsh = getLastTsValSecs("lastChildInitRefreshDt", 3600)?.abs()
@@ -5061,6 +5064,10 @@ private Map deviceSupportMap() {
             "A2WN1FJ2HG09UN": [ ignore: true ],
             "A18TCD9FP10WJ9": [ ignore: true ],
             "A1FWRGKHME4LXH": [ ignore: true ],
+            "A26TRKU1GG059T": [ ignore: true ],
+            "A2S24G29BFP88":  [ ignore: true, image: "unknown", name: "Ford/Lincoln Alexa App" ],
+            "A1NAFO69AAQ16Bk":  [ ignore: true, image: "unknown", name: "Wyze Band" ],
+            "A1NAFO69AAQ16B":  [ ignore: true, image: "unknown", name: "Wyze Band" ],
             "A3L2K717GERE73": [ ignore: true, image: "unknown", name: "Voice in a Can (iOS)" ],
             "A222D4HGE48EOR": [ ignore: true, image: "unknown", name: "Voice in a Can (Apple Watch)" ],
             "A19JK51Y4N50K5": [ ignore: true, image: "unknown", name: "Jabra(?)" ],
@@ -5082,20 +5089,27 @@ private Map deviceSupportMap() {
             "A38EHHIB10L47V": [ caps: [ "a", "t" ], image: "tablet_hd10", name: "Fire Tablet HD 8" ],
             "A3B50IC5QPZPWP": [ caps: [ "a", "t" ], image: "unknown", name: "Polk Command Bar" ],
             "A3B5K1G3EITBIF": [ caps: [ "a", "t" ], image: "facebook_portal", name: "Facebook Portal" ],
+            "A3D4YURNTARP5K": [ caps: [ "a", "t" ], image: "facebook_portal", name: "Facebook Portal TV" ],
             "A3CY98NH016S5F": [ caps: [ "a", "t" ], image: "unknown", name: "Facebook Portal Mini" ],
             "A3BRT6REMPQWA8": [ caps: [ "a", "t" ], image: "sonos_generic", name: "Bose Home Speaker 450" ],
             "A3C9PE6TNYLTCH": [ image: "echo_wha", name: "Multiroom" ],
             "A3F1S88NTZZXS9": [ blocked: true, image: "dash_wand", name: "Dash Wand" ],
             "A3FX4UWTP28V1P": [ caps: [ "a", "t" ], image: "echo_plus_gen2", name: "Echo (Gen3)" ],
             "A3H674413M2EKB": [ ignore: true ],
+            "A3KULB3NQN7Z1F": [ caps: [ "a", "t" ], image: "unknown", name: "Unknown TV" ],
+            "A18TCD9FP10WJ9": [ caps: [ "a", "t" ], image: "unknown", name: "Orbi Voice" ],
+            "AGHZIK8D6X7QR": [ caps: [ "a", "t" ], image: "unknown", name: "Fire TV" ],
             "A3HF4YRA2L7XGC": [ caps: [ "a", "t" ], image: "firetv_cube", name: "Fire TV Cube" ],
             "A3L0T0VL9A921N": [ caps: [ "a", "t" ], image: "tablet_hd10", name: "Fire Tablet HD 8" ],
             "A3NPD82ABCPIDP": [ caps: [ "t" ], image: "sonos_beam", name: "Sonos Beam" ],
-            "A3NVKTZUPX1J3X": [ blocked: true, name: "Unknown Device" ],
+            "A3NVKTZUPX1J3X": [ ignore: true, name: "Onkyp VC30" ],
             "A3NWHXTQ4EBCZS": [ ignore: true ],
+            "A2RG3FY1YV97SS": [ ignore: true ],
+            "A3K69RS3EIMXPI": [ caps: [ "a", "t" ], image: "unknown", name: "Hisense Smart TV" ],
             "A3QPPX1R9W5RJV": [ caps: [ "a", "t" ], image: "fabriq_chorus", name: "Fabriq Chorus" ],
             "A3R9S4ZZECZ6YL": [ caps: [ "a", "t" ], image: "tablet_hd10", name: "Fire Tablet HD 10" ],
             "A3RBAYBE7VM004": [ caps: [ "a", "t" ], image: "echo_studio", name: "Echo Studio" ],
+            "A2RU4B77X9R9NZ": [ caps: [ "a", "t" ], image: "echo_link_amp", name: "Echo Link Amp" ],
             "A3S5BH2HU6VAYF": [ caps: [ "a", "t" ], image: "echo_dot_gen2", name: "Echo Dot (Gen2)" ],
             "A3SSG6GR8UU7SN": [ caps: [ "a", "t" ], image: "echo_sub_gen1", name: "Echo Sub" ],
             "A3SSWQ04XYPXBH": [ blocked: true, image: "amazon_tablet", name: "Generic Tablet" ],

@@ -2,22 +2,22 @@
     "appDataVer": "4.0",
     "versions": {
         "mainApp": {
-            "ver": "3.6.2.0"
+            "ver": "3.6.3.1"
         },
         "actionApp": {
-            "ver": "3.6.2.0"
+            "ver": "3.6.3.1"
         },
         "zoneApp": {
-            "ver": "3.6.2.0"
+            "ver": "3.6.3.1"
         },
         "echoDevice": {
-            "ver": "3.6.2.0"
+            "ver": "3.6.3.2"
         },
         "wsDevice": {
-            "ver": "3.3.0.0"
+            "ver": "3.3.1.1"
         },
         "server": {
-            "ver": "2.4.1"
+            "ver": "2.6.0"
         }
     },
     "amazonDomains": [

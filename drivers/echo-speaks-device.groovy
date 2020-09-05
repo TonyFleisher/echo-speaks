@@ -13,8 +13,8 @@
  *  for the specific language governing permissions and limitations under the License.
  */
 
-String devVersion()  { return "3.6.2.0" }
-String devModified() { return "2020-04-22" }
+String devVersion()  { return "3.6.3.2" }
+String devModified() { return "2020-07-29" }
 Boolean isBeta()     { return false }
 Boolean isST()       { return (getPlatform() == "SmartThings") }
 Boolean isWS()       { return false }
@@ -50,6 +50,7 @@ metadata {
         attribute "followUpMode", "string"
         attribute "lastCmdSentDt", "string"
         attribute "lastSpeakCmd", "string"
+        attribute "lastAnnouncement", "string"
         attribute "lastSpokenToTime", "number"
         attribute "lastVoiceActivity", "string"
         attribute "lastUpdated", "string"
@@ -190,7 +191,7 @@ def initialize() {
     sendEvent(name: "DeviceWatch-Enroll", value: new groovy.json.JsonOutput().toJson([protocol: "cloud", scheme:"untracked"]), display: false, displayed: false)
     resetQueue()
     stateCleanup()
-    if(checkMinVersion()) { logError("CODE UPDATE required to RESUME operation.  No Device Events will updated."); return; }
+    if(minVersionFailed()) { logError("CODE UPDATE required to RESUME operation.  No Device Events will updated."); return; }
     schedDataRefresh(true)
     refreshData(true)
     //TODO: Have the queue validated based on the last time it was processed and have it cleanup if it's been too long
@@ -230,11 +231,13 @@ public updateCookies(cookies) {
 }
 
 public removeCookies(isParent=false) {
-    logWarn("Cookie Authentication Cleared by ${isParent ? "Parent" : "Device"} | Scheduled Refreshes also cancelled!")
-    unschedule("refreshData")
-    state?.cookie = null
-    state?.authValid = false
-    state?.refreshScheduled = false
+    if(state?.cookie != null && state?.authValid != false && state?.refreshScheduled != false) {
+        logWarn("Cookie Authentication Cleared by ${isParent ? "Parent" : "Device"} | Scheduled Refreshes also cancelled!")
+        unschedule("refreshData")
+        state?.cookie = null
+        state?.authValid = false
+        state?.refreshScheduled = false
+    }
 }
 
 Boolean isAuthOk(noLogs=false) {
@@ -484,7 +487,7 @@ private refreshData(full=false) {
         return
     }
     if(!isAuthOk()) {return}
-    if(checkMinVersion()) { logError("CODE UPDATE required to RESUME operation.  No Device Events will updated."); return; }
+    if(minVersionFailed()) { logError("CODE UPDATE required to RESUME operation.  No Device Events will updated."); return; }
     // logTrace("permissions: ${state?.permissions}")
     if(state?.permissions?.mediaPlayer == true && (full || state?.fullRefreshOk || !wsActive)) {
         getPlaybackState()
@@ -832,7 +835,7 @@ private getPlaylists() {
             // logTrace("getPlaylistsHandler: ${sData}")
             def playlist = sData ? sData?.playlists : [:]
             def playlistJson = new groovy.json.JsonOutput().toJson(playlist)
-            if(isStateChange(device, "alexaPlaylists", playlistJson?.toString())) {
+            if(isStateChange(device, "alexaPlaylists", playlistJson?.toString()) && playlistJson?.toString()?.length() < 1024) {
                 // log.trace "Alexa Playlists Changed to ${playlistJson}"
                 sendEvent(name: "alexaPlaylists", value: playlistJson?.toString(), display: false, displayed: false)
             }
@@ -883,7 +886,7 @@ private getDeviceActivity() {
         if(actData) {
             if (wasLastDevice) {
                 if(isStateChange(device, "lastVoiceActivity", actData?.spokenText?.toString())) {
-                    log.debug("lastVoiceActivity: ${actData?.spokenText}")
+                    logDebug("lastVoiceActivity: ${actData?.spokenText}")
                     sendEvent(name: "lastVoiceActivity", value: actData?.spokenText?.toString(), display: false, displayed: false)
                 }
                 if(isStateChange(device, "lastSpokenToTime", actData?.lastSpokenDt?.toString())) {
@@ -957,7 +960,7 @@ private String sendAmazonCommand(String method, Map params, Map otherData=null) 
             triggerDataRrsh()
         } else if(otherData?.cmdDesc?.startsWith("renameDevice")) { triggerDataRrsh(true) }
         logDebug("sendAmazonCommand | Status: (${rStatus})${rData != null ? " | Response: ${rData}" : ""} | ${otherData?.cmdDesc} was Successfully Sent!!!")
-        return rData?.id || null
+        return rData?.id ?: null
     } catch (ex) {
         respExceptionHandler(ex, "${otherData?.cmdDesc}", true)
     }
@@ -1506,6 +1509,7 @@ def playAnnouncement(String msg, volume=null, restoreVolume=null) {
             if(restoreVolume != null) { seqs?.push([command: "volume", value: restoreVolume]) }
             sendMultiSequenceCommand(seqs, "playAnnouncement")
         } else { doSequenceCmd("playAnnouncement", "announcement", msg) }
+        sendEvent(name: "lastAnnouncement", value: msg, display: false, displayed: false)
     }
 }
 
@@ -1517,6 +1521,7 @@ def playAnnouncement(String msg, String title, volume=null, restoreVolume=null) 
             if(restoreVolume != null) { seqs?.push([command: "volume", value: restoreVolume]) }
             sendMultiSequenceCommand(seqs, "playAnnouncement")
         } else { doSequenceCmd("playAnnouncement", "announcement", msg) }
+        sendEvent(name: "lastAnnouncement", value: msg, display: false, displayed: false)
     }
 }
 
@@ -2832,7 +2837,15 @@ private postCmdProcess(resp, statusCode, data) {
 ******************************************************/
 String getAppImg(imgName) { return "https://raw.githubusercontent.com/tonesto7/echo-speaks/${isBeta() ? "beta" : "master"}/resources/icons/$imgName" }
 Integer versionStr2Int(str) { return str ? str.toString()?.replaceAll("\\.", "")?.toInteger() : null }
-Boolean checkMinVersion() { return (versionStr2Int(devVersion()) < parent?.minVersions()["echoDevice"]) }
+Boolean minVersionFailed() {
+    try {
+        Integer minDevVer = parent?.minVersions()["echoDevice"] ?: null
+        if(minDevVer != null && versionStr2Int(devVersion()) < minDevVer) { return true }
+        else { return false }
+    } catch (e) { 
+        return false
+    }
+}
 def getDtNow() {
     def now = new Date()
     return formatDt(now, false)
